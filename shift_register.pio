@@ -1,0 +1,66 @@
+.program shift_register
+
+.side_set 3
+;side 0 !enable
+;side 1 latch
+;side 2 clock
+
+    set x 3         side 0b010
+din:
+    set y 31        side 0b000
+    pull            side 0b000
+output:
+    out pins 1      side 0b001   [2]
+    nop             side 0b101   [2]
+    nop             side 0b001
+    jmp y-- output  side 0b001
+    jmp x-- din     side 0b000
+
+
+% c-sdk {
+static inline void pio_shift_register_init( PIO pio, uint sm, uint offset, uint out_base ,uint out_pin_num, uint set_base ,uint set_pin_num, uint side_base, uint side_pin_num )
+{
+    pio_sm_config c = shift_register_program_get_default_config( offset );
+        /* PIOステートマシンコンフィグのデフォルト値を取得 */
+
+    sm_config_set_out_pins( &c, out_base, out_pin_num );
+        /* PIOステートマシンコンフィグの出力ピン設定を編集する */
+        /* ベースピン番号とベースから何ピンまで使うかを指定 */
+    sm_config_set_sideset_pins( &c, side_base );
+        /* PIOステートマシンコンフィグのsideピン設定を編集する */
+        /* ベースピン番号を指定(何ピン使うかはアセンブラ側で指定する) */
+
+    {
+        uint pin_offset;
+        for ( pin_offset = 0; pin_offset < out_pin_num; pin_offset++ )
+        {
+            pio_gpio_init( pio, out_base + pin_offset );
+            /* GPIOをPIOに割り当てる */
+        }
+        for ( pin_offset = 0; pin_offset < set_pin_num; pin_offset++ )
+        {
+            pio_gpio_init( pio, set_base + pin_offset );
+            /* GPIOをPIOに割り当てる */
+        }
+        for ( pin_offset = 0; pin_offset < side_pin_num; pin_offset++ )
+        {
+            pio_gpio_init( pio, side_base + pin_offset );
+            /* GPIOをPIOに割り当てる */
+        }
+    }
+
+    pio_sm_set_consecutive_pindirs( pio, sm, out_base, out_pin_num, true );
+        /* ピンの向きを設定 */
+    pio_sm_set_consecutive_pindirs( pio, sm, side_base, side_pin_num, true );
+        /* ピンの向きを設定 */
+
+    sm_config_set_clkdiv( &c, 6 );
+        /* クロック周波数6分周 */
+
+    pio_sm_init( pio, sm, offset, &c );
+        /* PIOステートマシンコンフィグを反映しプログラムカウンタを設定 */
+
+    pio_sm_set_enabled( pio, sm, true );
+        /* PIOステートマシンを有効にする */
+}
+%}
