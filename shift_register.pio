@@ -54,7 +54,7 @@ static inline void pio_shift_register_init( PIO pio, uint sm, uint offset, uint 
     pio_sm_set_consecutive_pindirs( pio, sm, side_base, side_pin_num, true );
         /* ピンの向きを設定 */
 
-    sm_config_set_clkdiv( &c, 6 );
+    sm_config_set_clkdiv( &c, 2 );
         /* クロック周波数6分周 */
 
     pio_sm_init( pio, sm, offset, &c );

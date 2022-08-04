@@ -7,10 +7,15 @@
 #include "hardware/pio.h"
 #include "pico/multicore.h"
 #include "shift_register.pio.h"
+#include "led_map.h"
 
 
 // multicore defines
-#define CORE_STARTED 123
+#define CORE_STARTED    123
+#define DATA_END        0xC0    // slip compatible
+#define DATA_ESC        0xDB
+#define DATA_ESC_END    0xDC
+#define DATA_ESC_ESC    0xDD
 
 // SPI Defines
 #define SPI_PORT spi0
@@ -52,11 +57,46 @@ void core1_data_transfer(){
     while(true){
         uint32_t data = multicore_fifo_pop_blocking();
 
-        uint8_t sensor_ch = (data >> 24) & 0xFF;
-        uint8_t mode = (data >> 16) & 0xFF;
-        uint16_t raw = data & 0xFFFF;
+        uint8_t buf[4] = {};
+        buf[0] = (data >> 24) & 0xFF;
+        buf[1] = (data >> 16) & 0xFF;
+        buf[2] = (data >> 8) & 0xFF;
+        buf[3] = data & 0xFF;
 
-        printf("%d, %d, %d\n", sensor_ch, mode, raw);
+        switch(buf[0]){
+            case 0:
+                buf[0] = 119;
+                break;
+            case 1:
+                buf[0] = 120;
+                break;
+            default:
+                buf[0] -= 2;
+        }
+
+        int cnt = 0;
+        bool end_flg = true;
+        while(end_flg){
+            switch(buf[cnt]) {
+                case DATA_END:
+                    putchar_raw(DATA_ESC);
+                    putchar_raw(DATA_ESC_END);
+                    break;
+                case DATA_ESC:
+                    putchar_raw(DATA_ESC);
+                    putchar_raw(DATA_ESC_ESC);
+                    break;
+                default:
+                    putchar_raw(buf[cnt]);
+                    break;
+            }
+            cnt++;
+            if(cnt == 4){
+                putchar_raw(DATA_END);
+                end_flg = false;
+            }
+        }
+
     }
 }
 
@@ -88,6 +128,14 @@ void set_ir(uint8_t num){
     ir_buffer[ld_num] |= 0x80000000 >> (num & 0b00011111);
 }
 
+void set_ir_from_map(uint8_t num){
+    uint32_t map = led_map[num];
+    set_ir((map >> 24) & 0xFF);
+    set_ir((map >> 16) & 0xFF);
+    set_ir((map >> 8) & 0xFF);
+    set_ir(map & 0xFF);
+}
+
 void clear_ir(){
     for (int i = 0; i < DC_COUNT; i++){
         ir_buffer[i] = 0;
@@ -106,7 +154,7 @@ int main()
     stdio_init_all();
 
     // SPI initialisation. This example will use SPI at 1MHz.
-    spi_init(SPI_PORT, 1000*1000);
+    spi_init(SPI_PORT, 1000*3000);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
@@ -156,31 +204,33 @@ int main()
 
     while(true){
 
+        // set decoder and multiplexer
         set_ch(sensor_ch);
 
+        // set led driver
         clear_ir();
-        set_ir(sensor_ch);
+        set_ir_from_map(sensor_ch);
         put_ir(pio);
 
-        sleep_ms(200);
-
-        // CONVERSION
-        spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
-
-        asm volatile("nop \n nop \n nop");
-        gpio_put(PIN_CS, 0);
-        asm volatile("nop \n nop \n nop");
-
-        // READ
-        spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
-
-        asm volatile("nop \n nop \n nop");
-        gpio_put(PIN_CS, 1);
-
-        //printf("ADC : %d (ch %d)\n", buffer, sensor_ch);
         uint32_t mg = (sensor_ch << 24) | buffer;
         multicore_fifo_push_blocking(mg);
 
+        // Conversion Sample (sensor_ch -1)
+        spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
+
+        // Conversion Result of (sensor_ch - 1)
+        gpio_put(PIN_CS, 0);
+        asm volatile("nop \n nop \n nop");
+        spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
+        asm volatile("nop \n nop \n nop");
+        gpio_put(PIN_CS, 1);
+
+        // Acquiring Sample
+
+        //printf("ADC : %d (ch %d)\n", buffer, sensor_ch);
+        //multicore_fifo_push_timeout_us(mg, 10);
+
+        // increment
         sensor_ch++;
         if(sensor_ch == 121) sensor_ch = 0;
 
