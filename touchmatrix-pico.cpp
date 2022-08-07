@@ -188,7 +188,11 @@ int main()
     PIO pio = pio0;
     uint sm = pio_claim_unused_sm(pio, true);
     uint offset = pio_add_program(pio, &shift_register_program);
-    pio_shift_register_init(pio, sm, offset, PIN_LD_SIN, 1, 0, 0, PIN_LD_BLANK, 3);
+    pio_shift_register_init(pio, sm, offset, PIN_LD_SIN, 1, 0, 0, PIN_LD_LAT, 2);
+    // led driver enable
+    gpio_init(PIN_LD_BLANK);
+    gpio_set_dir(PIN_LD_BLANK, GPIO_OUT);
+    gpio_put(PIN_LD_BLANK, 0);
 
     // initialize variable
     uint16_t buffer = 0xffff;
@@ -211,24 +215,23 @@ int main()
         clear_ir();
         set_ir_from_map(sensor_ch);
         put_ir(pio);
+        gpio_put(PIN_LD_BLANK, 0);
 
-        uint32_t mg = (sensor_ch << 24) | buffer;
+        uint16_t tmp = buffer;
+        uint32_t mg = (sensor_ch << 24) | tmp;
         multicore_fifo_push_blocking(mg);
 
-        // Conversion Sample (sensor_ch -1)
+        sleep_us(30);
+
+        // Conversion Sample (sensor_ch, led on)
         spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
 
-        // Conversion Result of (sensor_ch - 1)
+        // Conversion Result of (sensor_ch, led on)
         gpio_put(PIN_CS, 0);
         asm volatile("nop \n nop \n nop");
         spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
         asm volatile("nop \n nop \n nop");
         gpio_put(PIN_CS, 1);
-
-        // Acquiring Sample
-
-        //printf("ADC : %d (ch %d)\n", buffer, sensor_ch);
-        //multicore_fifo_push_timeout_us(mg, 10);
 
         // increment
         sensor_ch++;

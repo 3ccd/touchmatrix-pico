@@ -1,20 +1,19 @@
 .program shift_register
 
-.side_set 3
-;side 0 !enable
-;side 1 latch
-;side 2 clock
+.side_set 2
+;side 0 latch
+;side 1 clock
 
-    set x 3         side 0b010
+    set x 3         side 0b01
 din:
-    set y 31        side 0b000
-    pull            side 0b000
+    set y 31        side 0b00
+    pull            side 0b00
 output:
-    out pins 1      side 0b001   [2]
-    nop             side 0b101   [2]
-    nop             side 0b001
-    jmp y-- output  side 0b001
-    jmp x-- din     side 0b000
+    out pins 1      side 0b00   [2]
+    nop             side 0b10   [2]
+    nop             side 0b00
+    jmp y-- output  side 0b00
+    jmp x-- din     side 0b00
 
 
 % c-sdk {
