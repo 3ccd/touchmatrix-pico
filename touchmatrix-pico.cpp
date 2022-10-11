@@ -7,8 +7,12 @@
 #include "hardware/pio.h"
 #include "pico/multicore.h"
 #include "shift_register.pio.h"
-#include "led_map.h"
+#include "resources/led_map.h"
 
+
+// operation mode
+#define OP_4LED
+#define OP_1LED
 
 // multicore defines
 #define CORE_STARTED    123
@@ -44,6 +48,12 @@
 
 // LED Driver Settings
 #define DC_COUNT        4
+
+// IR LED Mode
+#define LED_NORTH       1
+#define LED_WEST        2
+#define LED_EAST        4
+#define LED_SOUTH       8
 
 
 uint32_t dc_mask;
@@ -128,12 +138,12 @@ void set_ir(uint8_t num){
     ir_buffer[ld_num] |= 0x80000000 >> (num & 0b00011111);
 }
 
-void set_ir_from_map(uint8_t num){
+void set_ir_from_map(uint8_t num, uint8_t mode){
     uint32_t map = led_map[num];
-    set_ir((map >> 24) & 0xFF);
-    set_ir((map >> 16) & 0xFF);
-    set_ir((map >> 8) & 0xFF);
-    set_ir(map & 0xFF);
+    if(mode | 0b1000) set_ir((map >> 24) & 0xFF);
+    if(mode | 0b0100) set_ir((map >> 16) & 0xFF);
+    if(mode | 0b0010) set_ir((map >> 8) & 0xFF);
+    if(mode | 0b0001) set_ir(map & 0xFF);
 }
 
 void clear_ir(){
@@ -197,6 +207,13 @@ int main()
     // initialize variable
     uint16_t buffer = 0xffff;
     uint16_t sensor_ch = 0;
+    uint8_t mode = 0;
+#ifdef OP_1LED
+    uint8_t mc = 0;
+#else
+    uint8_t mc = 5;
+#endif
+
     clear_ir();
 
     // core1 init
@@ -213,12 +230,30 @@ int main()
 
         // set led driver
         clear_ir();
-        set_ir_from_map(sensor_ch);
+        switch (mode) {
+            case 0:
+                set_ir_from_map(sensor_ch, LED_NORTH + LED_WEST + LED_EAST + LED_SOUTH);
+                break;
+            case 1:
+                set_ir_from_map(sensor_ch, LED_NORTH);
+                break;
+            case 2:
+                set_ir_from_map(sensor_ch, LED_WEST);
+                break;
+            case 3:
+                set_ir_from_map(sensor_ch, LED_EAST);
+                break;
+            case 4:
+                set_ir_from_map(sensor_ch, LED_SOUTH);
+                break;
+            default:
+                break;
+        }
         put_ir(pio);
         gpio_put(PIN_LD_BLANK, 0);
 
         uint16_t tmp = buffer;
-        uint32_t mg = (sensor_ch << 24) | tmp;
+        uint32_t mg = (sensor_ch << 24)| (mode << 16) | tmp;
         multicore_fifo_push_blocking(mg);
 
         sleep_us(30);
@@ -234,8 +269,12 @@ int main()
         gpio_put(PIN_CS, 1);
 
         // increment
-        sensor_ch++;
-        if(sensor_ch == 121) sensor_ch = 0;
+        mode++;
+        if(mode > mc){
+            mode = 0;
+            sensor_ch++;
+            if(sensor_ch == 121) sensor_ch = 0;
+        }
 
     }
 

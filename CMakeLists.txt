@@ -18,8 +18,9 @@ project(touchmatrix-pico C CXX ASM)
 pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
+include_directories(resources)
 
-add_executable(touchmatrix-pico touchmatrix-pico.cpp led_map.h)
+add_executable(touchmatrix-pico touchmatrix-pico.cpp)
 
 pico_generate_pio_header(touchmatrix-pico ${CMAKE_CURRENT_LIST_DIR}/shift_register.pio)
 
