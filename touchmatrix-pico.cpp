@@ -12,7 +12,7 @@
 
 // operation mode
 #define OP_4LED
-#define OP_1LED
+//#define OP_1LED
 
 // multicore defines
 #define CORE_STARTED    123
@@ -209,9 +209,9 @@ int main()
     uint16_t sensor_ch = 0;
     uint8_t mode = 0;
 #ifdef OP_1LED
-    uint8_t mc = 0;
+    const uint8_t mc = 0;
 #else
-    uint8_t mc = 5;
+    const uint8_t mc = 4;
 #endif
 
     clear_ir();
