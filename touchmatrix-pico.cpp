@@ -256,7 +256,7 @@ int main()
         uint32_t mg = (sensor_ch << 24)| (mode << 16) | tmp;
         multicore_fifo_push_blocking(mg);
 
-        sleep_us(30);
+        sleep_us(50);
 
         // Conversion Sample (sensor_ch, led on)
         spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
