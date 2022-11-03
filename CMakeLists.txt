@@ -42,3 +42,5 @@ target_link_libraries(touchmatrix-pico
 
 pico_add_extra_outputs(touchmatrix-pico)
 
+add_subdirectory(pcb_test)
+
