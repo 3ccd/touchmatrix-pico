@@ -43,7 +43,7 @@ target_link_libraries(touchmatrix-pico
 pico_add_extra_outputs(touchmatrix-pico)
 
 add_custom_command(TARGET touchmatrix-pico POST_BUILD
-        COMMAND cp ${CMAKE_CURRENT_BINARY_DIR}/touchmatrix-pico.uf2 /media/ura/RPI-RP2)
+        COMMAND cp ${CMAKE_CURRENT_BINARY_DIR}/touchmatrix-pico.uf2 /media/ura/RPI-RP2 || (exit 0))
 
 add_subdirectory(pcb_test)
 
