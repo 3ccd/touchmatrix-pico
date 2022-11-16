@@ -186,7 +186,10 @@ int main()
     spi_init(SPI_PORT, 3 * MHZ);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
-    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
+    gpio_set_function(14, GPIO_FUNC_SPI);
+    gpio_init(PIN_MOSI);
+    gpio_set_dir(PIN_MOSI, GPIO_OUT);
+    gpio_put(PIN_MOSI, true);
 
     spi_set_format(SPI_PORT, 16, SPI_CPOL_1, SPI_CPHA_0, SPI_MSB_FIRST);
     
@@ -241,6 +244,11 @@ int main()
     if(ret == CORE_STARTED){
 
     }
+
+    // pilot lamp
+    gpio_init(25);
+    gpio_set_dir(25, GPIO_OUT);
+    gpio_put(25, true);
 
     while(true){
 
