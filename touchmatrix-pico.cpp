@@ -1,18 +1,34 @@
-#include <stdio.h>
+
+// TM board version (load led map)
+//#define TM_2
+#define TM_3_DISCOVERY
+
 #include <pico/binary_info.h>
 #include "pico/stdlib.h"
-#include "hardware/uart.h"
 #include "hardware/gpio.h"
 #include "hardware/spi.h"
 #include "hardware/pio.h"
 #include "pico/multicore.h"
 #include "shift_register.pio.h"
+
+#ifdef TM_2
+
 #include "resources/led_map.h"
+#define SENSOR_COUNT 121
 
+#elif defined(TM_3_DISCOVERY)
 
-// operation mode
-#define OP_4LED
-//#define OP_1LED
+#include "resources/led_map_tm3dis.h"
+#define SENSOR_COUNT 61
+
+#endif
+
+// operation mode (1LED or 4LED)
+//#define OP_4LED
+#define OP_1LED
+
+// util
+#define MHZ 1000000
 
 // multicore defines
 #define CORE_STARTED    123
@@ -72,7 +88,7 @@ void core1_data_transfer(){
         buf[1] = (data >> 16) & 0xFF;
         buf[2] = (data >> 8) & 0xFF;
         buf[3] = data & 0xFF;
-
+/*
         switch(buf[0]){
             case 0:
                 buf[0] = 119;
@@ -82,7 +98,7 @@ void core1_data_transfer(){
                 break;
             default:
                 buf[0] -= 2;
-        }
+        }*/
 
         int cnt = 0;
         bool end_flg = true;
@@ -133,13 +149,16 @@ void set_ch(uint16_t num){
 }
 
 void set_ir(uint8_t num){
-    //num = 127 - num;
     uint8_t ld_num = (num >> 5) & 0b00000011;
     ir_buffer[ld_num] |= 0x80000000 >> (num & 0b00011111);
 }
 
 void set_ir_from_map(uint8_t num, uint8_t mode){
+#ifdef TM_2
     uint32_t map = led_map[num];
+#elif defined(TM_3_DISCOVERY)
+    uint32_t map = led_map_tm3dis[num];
+#endif
     if(mode | 0b1000) set_ir((map >> 24) & 0xFF);
     if(mode | 0b0100) set_ir((map >> 16) & 0xFF);
     if(mode | 0b0010) set_ir((map >> 8) & 0xFF);
@@ -164,7 +183,7 @@ int main()
     stdio_init_all();
 
     // SPI initialisation. This example will use SPI at 1MHz.
-    spi_init(SPI_PORT, 1000*3000);
+    spi_init(SPI_PORT, 3 * MHZ);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
@@ -210,7 +229,7 @@ int main()
     uint8_t mode = 0;
 #ifdef OP_1LED
     const uint8_t mc = 0;
-#else
+#elif defined(OP_4LED)
     const uint8_t mc = 4;
 #endif
 
@@ -273,7 +292,7 @@ int main()
         if(mode > mc){
             mode = 0;
             sensor_ch++;
-            if(sensor_ch == 121) sensor_ch = 0;
+            if(sensor_ch == SENSOR_COUNT) sensor_ch = 0;
         }
 
     }
