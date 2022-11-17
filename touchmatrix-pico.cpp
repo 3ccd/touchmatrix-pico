@@ -228,6 +228,7 @@ int main()
 
     // initialize variable
     uint16_t buffer = 0xffff;
+    uint16_t dummy = 0;
     uint16_t sensor_ch = 0;
     uint8_t mode = 0;
 #ifdef OP_1LED
@@ -279,14 +280,9 @@ int main()
         put_ir(pio);
         gpio_put(PIN_LD_BLANK, 0);
 
-        uint16_t tmp = buffer;
-        uint32_t mg = (sensor_ch << 24)| (mode << 16) | tmp;
-        multicore_fifo_push_blocking(mg);
 
         sleep_us(50);
 
-        // Conversion Sample (sensor_ch, led on)
-        spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
 
         // Conversion Result of (sensor_ch, led on)
         gpio_put(PIN_CS, 0);
@@ -294,6 +290,20 @@ int main()
         spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
         asm volatile("nop \n nop \n nop");
         gpio_put(PIN_CS, 1);
+
+        // Conversion Sample (sensor_ch, led on)
+        spi_read16_blocking(SPI_PORT, 0, &dummy, 1);
+
+        gpio_put(PIN_CS, 0);
+        asm volatile("nop \n nop \n nop");
+        spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
+        asm volatile("nop \n nop \n nop");
+        gpio_put(PIN_CS, 1);
+
+
+        uint16_t tmp = buffer;
+        uint32_t mg = (sensor_ch << 24)| (mode << 16) | tmp;
+        multicore_fifo_push_blocking(mg);
 
         // increment
         mode++;
