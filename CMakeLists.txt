@@ -22,7 +22,8 @@ include_directories(resources)
 
 add_executable(touchmatrix-pico touchmatrix-pico.cpp)
 
-pico_generate_pio_header(touchmatrix-pico pio/shift_register.pio)
+pico_generate_pio_header(touchmatrix-pico ${PROJECT_SOURCE_DIR}/pio/shift_register.pio)
+pico_generate_pio_header(touchmatrix-pico ${PROJECT_SOURCE_DIR}/pio/ws2812.pio)
 
 pico_set_program_name(touchmatrix-pico "touchmatrix-pico")
 pico_set_program_version(touchmatrix-pico "0.1")

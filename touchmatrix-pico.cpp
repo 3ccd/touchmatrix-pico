@@ -10,6 +10,7 @@
 #include "hardware/pio.h"
 #include "pico/multicore.h"
 #include "shift_register.pio.h"
+#include "ws2812.pio.h"
 
 #ifdef TM_2
 
@@ -70,6 +71,11 @@
 #define LED_WEST        2
 #define LED_EAST        4
 #define LED_SOUTH       8
+
+// RGB LED defines
+#define PIN_RGB         15
+#define RGB_CLOCK       800000
+#define RGB_IS_RGBW     false
 
 
 uint32_t dc_mask;
@@ -178,6 +184,13 @@ void put_ir(PIO pio){
     pio_sm_put_blocking(pio, 0, ir_buffer[0]);
 }
 
+void put_rgb(PIO pio, uint8_t r, uint8_t b, uint8_t g){
+    uint32_t tmp_color = ((uint32_t) (r) << 8) |
+                         ((uint32_t) (g) << 16) |
+                         (uint32_t) (b);
+    pio_sm_put_blocking(pio, 0, tmp_color << 8u);
+}
+
 int main()
 {
     stdio_init_all();
@@ -226,6 +239,12 @@ int main()
     gpio_set_dir(PIN_LD_BLANK, GPIO_OUT);
     gpio_put(PIN_LD_BLANK, 0);
 
+    // initialize pio no.2
+    PIO rgb_pio pio1;
+    sm = pio_claim_unused_sm(rgb_pio, true);
+    offset = pio_add_program(rgb_pio, &ws2812_program);
+    ws2812_program_init(rgb_pio, sm, offset, PIN_RGB, RGB_CLOCK, RGB_IS_RGBW);
+
     // initialize variable
     uint16_t buffer = 0xffff;
     uint16_t dummy = 0;
@@ -250,6 +269,10 @@ int main()
     gpio_init(25);
     gpio_set_dir(25, GPIO_OUT);
     gpio_put(25, true);
+
+    for(int i = 0; i < 6; i++){
+        put_rgb(rgb_pio, 255, 0, 0);
+    }
 
     while(true){
 
