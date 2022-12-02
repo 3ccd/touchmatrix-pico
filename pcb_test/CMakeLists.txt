@@ -1,6 +1,6 @@
 add_executable(ir-test ir_led.cpp)
 
-pico_generate_pio_header(ir-test ${CMAKE_CURRENT_LIST_DIR}/../shift_register.pio)
+pico_generate_pio_header(ir-test ../pio/shift_register.pio)
 
 pico_set_program_name(ir-test "ir-test")
 pico_set_program_version(ir-test "0.1")

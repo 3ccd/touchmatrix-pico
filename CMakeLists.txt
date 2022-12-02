@@ -22,7 +22,7 @@ include_directories(resources)
 
 add_executable(touchmatrix-pico touchmatrix-pico.cpp)
 
-pico_generate_pio_header(touchmatrix-pico ${CMAKE_CURRENT_LIST_DIR}/shift_register.pio)
+pico_generate_pio_header(touchmatrix-pico pio/shift_register.pio)
 
 pico_set_program_name(touchmatrix-pico "touchmatrix-pico")
 pico_set_program_version(touchmatrix-pico "0.1")

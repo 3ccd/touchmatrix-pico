@@ -2,14 +2,11 @@
 // Created by ura on 2022/10/31.
 //
 
-#include <stdio.h>
 #include <pico/binary_info.h>
 #include "pico/stdlib.h"
-#include "hardware/uart.h"
 #include "hardware/gpio.h"
 #include "hardware/spi.h"
 #include "hardware/pio.h"
-#include "pico/multicore.h"
 #include "shift_register.pio.h"
 
 
