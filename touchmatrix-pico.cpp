@@ -83,6 +83,10 @@ uint32_t mux_mask;
 uint32_t ir_buffer[DC_COUNT];
 
 
+uint16_t buffer = 0xffff;
+uint16_t dummy = 0;
+
+
 void core1_data_transfer(){
     multicore_fifo_push_blocking(CORE_STARTED);
 
@@ -191,6 +195,28 @@ void put_rgb(PIO pio, uint8_t r, uint8_t b, uint8_t g){
     pio_sm_put_blocking(pio, 0, tmp_color << 8u);
 }
 
+void acquisition(){
+    // Conversion Result of (sensor_ch, led on)
+    gpio_put(PIN_CS, 0);
+    asm volatile("nop \n nop \n nop");
+    spi_read16_blocking(SPI_PORT, 0, &dummy, 1);
+    asm volatile("nop \n nop \n nop");
+    gpio_put(PIN_CS, 1);
+
+    // Conversion Sample (sensor_ch, led on)
+    spi_read16_blocking(SPI_PORT, 0, &dummy, 1);
+
+    gpio_put(PIN_CS, 0);
+    asm volatile("nop \n nop \n nop");
+    spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
+    asm volatile("nop \n nop \n nop");
+    gpio_put(PIN_CS, 1);
+}
+
+inline void ir_led_enable(bool enable){
+    gpio_put(PIN_LD_BLANK, !enable);
+}
+
 int main()
 {
     stdio_init_all();
@@ -246,8 +272,6 @@ int main()
     ws2812_program_init(rgb_pio, sm, offset, PIN_RGB, RGB_CLOCK, RGB_IS_RGBW);
 
     // initialize variable
-    uint16_t buffer = 0xffff;
-    uint16_t dummy = 0;
     uint16_t sensor_ch = 0;
     uint8_t mode = 0;
 #ifdef OP_1LED
@@ -270,9 +294,7 @@ int main()
     gpio_set_dir(25, GPIO_OUT);
     gpio_put(25, true);
 
-    for(int i = 0; i < 6; i++){
-        put_rgb(rgb_pio, 255, 0, 0);
-    }
+    bool rgb_on = false;
 
     while(true){
 
@@ -300,31 +322,24 @@ int main()
             default:
                 break;
         }
+        ir_led_enable(false);
         put_ir(pio);
-        gpio_put(PIN_LD_BLANK, 0);
-
+        ir_led_enable(true);
 
         sleep_us(50);
 
-
-        // Conversion Result of (sensor_ch, led on)
-        gpio_put(PIN_CS, 0);
-        asm volatile("nop \n nop \n nop");
-        spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
-        asm volatile("nop \n nop \n nop");
-        gpio_put(PIN_CS, 1);
-
-        // Conversion Sample (sensor_ch, led on)
-        spi_read16_blocking(SPI_PORT, 0, &dummy, 1);
-
-        gpio_put(PIN_CS, 0);
-        asm volatile("nop \n nop \n nop");
-        spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
-        asm volatile("nop \n nop \n nop");
-        gpio_put(PIN_CS, 1);
-
-
+        acquisition();
         uint16_t tmp = buffer;
+
+        ir_led_enable(false);
+        sleep_us(50);
+        acquisition();
+
+        if(tmp > buffer){
+            tmp -= buffer;
+        }else{
+            tmp = 0;
+        }
         uint32_t mg = (sensor_ch << 24)| (mode << 16) | tmp;
         multicore_fifo_push_blocking(mg);
 
@@ -333,7 +348,13 @@ int main()
         if(mode > mc){
             mode = 0;
             sensor_ch++;
-            if(sensor_ch == SENSOR_COUNT) sensor_ch = 0;
+            if(sensor_ch == SENSOR_COUNT){
+                /*rgb_on = !rgb_on;
+                for(int i = 0; i < 6; i++){
+                    put_rgb(rgb_pio, (int)rgb_on * 255, 0, 0);
+                }*/
+                sensor_ch = 0;
+            }
         }
 
     }
