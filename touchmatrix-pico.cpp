@@ -213,6 +213,15 @@ void acquisition(){
     gpio_put(PIN_CS, 1);
 }
 
+void smooth_acquisition(){
+    uint32_t tmp = 0x00;
+    for (int i = 0; i < 4; i++){
+        acquisition();
+        tmp += buffer;
+    }
+    buffer = tmp >> 2;
+}
+
 inline void ir_led_enable(bool enable){
     gpio_put(PIN_LD_BLANK, !enable);
 }
@@ -328,12 +337,12 @@ int main()
 
         sleep_us(50);
 
-        acquisition();
+        smooth_acquisition();
         uint16_t tmp = buffer;
 
         ir_led_enable(false);
         sleep_us(50);
-        acquisition();
+        smooth_acquisition();
 
         if(tmp > buffer){
             tmp -= buffer;
