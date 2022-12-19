@@ -219,7 +219,7 @@ void smooth_acquisition(){
         acquisition();
         tmp += buffer;
     }
-    buffer = tmp >> 2;
+    buffer = (tmp >> 3) & 0xFFFF;
 }
 
 inline void ir_led_enable(bool enable){
@@ -333,23 +333,22 @@ int main()
         }
         ir_led_enable(false);
         put_ir(pio);
-        ir_led_enable(true);
 
         sleep_us(50);
 
         smooth_acquisition();
         uint16_t tmp = buffer;
 
-        ir_led_enable(false);
-        sleep_us(50);
+        ir_led_enable(true);
+        sleep_us(20);
         smooth_acquisition();
 
-        if(tmp > buffer){
-            tmp -= buffer;
+        if(buffer > tmp){
+            buffer -= tmp;
         }else{
-            tmp = 0;
+            buffer = 0x0000;
         }
-        uint32_t mg = (sensor_ch << 24)| (mode << 16) | tmp;
+        uint32_t mg = (sensor_ch << 24)| (mode << 16) | buffer;
         multicore_fifo_push_blocking(mg);
 
         // increment
