@@ -153,7 +153,7 @@ int main()
     // configuration adc
     uint8_t adc_conf[3] = {};
     adc_conf[0] = REG_CONF;
-    adc_conf[1] = 0x00;
+    adc_conf[1] = 0b00001010;
     adc_conf[2] = 0b11100000;
     i2c_write_blocking(i2c_default, I2C_ADDR, adc_conf, 3, true);
 
