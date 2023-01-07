@@ -27,10 +27,12 @@ namespace ex_adc {
     private:
         i2c_inst *i2CInst;
         uint8_t dev_addr = 0x00;
+
+        uint8_t buffer[2] = {};
     public:
         ADS1114(i2c_inst *i2CInstr, uint8_t pin_sda, uint8_t pin_scl);
         void init(uint8_t addr, uint8_t rate, uint8_t pga);
-        [[nodiscard]] int16_t read() const;
+        void read(uint16_t *val);
     };
 
 } // ex_adc

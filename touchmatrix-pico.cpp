@@ -3,6 +3,7 @@
 //#define TM_2
 #define TM_3_DISCOVERY
 
+#include <cstdio>
 #include <pico/binary_info.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
@@ -39,6 +40,11 @@
 #define DATA_ESC        0xDB
 #define DATA_ESC_END    0xDC
 #define DATA_ESC_ESC    0xDD
+
+// I2C ADC defines
+#define PIN_SCL         17
+#define PIN_SDA         16
+#define I2C_ADDR        0b1001000
 
 // SPI Defines
 #define SPI_PORT spi0
@@ -84,10 +90,7 @@ uint32_t dc_mask;
 uint32_t mux_mask;
 uint32_t ir_buffer[DC_COUNT];
 
-
-uint16_t buffer = 0xffff;
-uint16_t dummy = 0;
-
+uint16_t buffer = 0;
 
 void core1_data_transfer(){
     multicore_fifo_push_blocking(CORE_STARTED);
@@ -186,33 +189,6 @@ void put_rgb(PIO pio, uint8_t r, uint8_t b, uint8_t g){
     pio_sm_put_blocking(pio, 0, tmp_color << 8u);
 }
 
-void acquisition(){
-    // Conversion Result of (sensor_ch, led on)
-    gpio_put(PIN_CS, 0);
-    asm volatile("nop \n nop \n nop");
-    spi_read16_blocking(SPI_PORT, 0, &dummy, 1);
-    asm volatile("nop \n nop \n nop");
-    gpio_put(PIN_CS, 1);
-
-    // Conversion Sample (sensor_ch, led on)
-    spi_read16_blocking(SPI_PORT, 0, &dummy, 1);
-
-    gpio_put(PIN_CS, 0);
-    asm volatile("nop \n nop \n nop");
-    spi_read16_blocking(SPI_PORT, 0, &buffer, 1);
-    asm volatile("nop \n nop \n nop");
-    gpio_put(PIN_CS, 1);
-}
-
-void smooth_acquisition(){
-    uint32_t tmp = 0x00;
-    for (int i = 0; i < 4; i++){
-        acquisition();
-        tmp += buffer;
-    }
-    buffer = (tmp >> 3) & 0xFFFF;
-}
-
 inline void ir_led_enable(bool enable){
     gpio_put(PIN_LD_BLANK, !enable);
 }
@@ -221,21 +197,9 @@ int main()
 {
     stdio_init_all();
 
-    // SPI initialisation. This example will use SPI at 1MHz.
-    spi_init(SPI_PORT, 3 * MHZ);
-    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
-    gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
-    gpio_set_function(14, GPIO_FUNC_SPI);
-    gpio_init(PIN_MOSI);
-    gpio_set_dir(PIN_MOSI, GPIO_OUT);
-    gpio_put(PIN_MOSI, true);
-
-    spi_set_format(SPI_PORT, 16, SPI_CPOL_1, SPI_CPHA_0, SPI_MSB_FIRST);
-    
-    // Chip select is active-low, so we'll initialise it to a driven-high state
-    gpio_init(PIN_CS);
-    gpio_set_dir(PIN_CS, GPIO_OUT);
-    gpio_put(PIN_CS, 1);
+    // ADC init
+    ex_adc::ADS1114 adc = ex_adc::ADS1114(i2c_default, PIN_SDA, PIN_SCL);
+    adc.init(I2C_ADDR, ex_adc::DATA_RATE_860, ex_adc::PGA_512);
 
     // initialize decoder gpio
     dc_mask = 0x00;
@@ -325,20 +289,20 @@ int main()
         ir_led_enable(false);
         put_ir(pio);
 
-        sleep_us(50);
+        //sleep_us(50);
 
-        smooth_acquisition();
-        uint16_t tmp = buffer;
+        //uint16_t tmp = adc.read();
 
         ir_led_enable(true);
-        sleep_us(20);
-        smooth_acquisition();
+        sleep_ms(3);
+        //sleep_us(20);
+        adc.read(&buffer);
 
-        if(buffer > tmp){
+        /*if(buffer > tmp){
             buffer -= tmp;
         }else{
             buffer = 0x0000;
-        }
+        }*/
         uint32_t mg = (sensor_ch << 24)| (mode << 16) | buffer;
         multicore_fifo_push_blocking(mg);
 
