@@ -9,6 +9,8 @@
 #include "hardware/spi.h"
 #include "hardware/pio.h"
 #include "pico/multicore.h"
+
+#include "ADS1114.h"
 #include "shift_register.pio.h"
 #include "ws2812.pio.h"
 
@@ -98,17 +100,6 @@ void core1_data_transfer(){
         buf[1] = (data >> 16) & 0xFF;
         buf[2] = (data >> 8) & 0xFF;
         buf[3] = data & 0xFF;
-/*
-        switch(buf[0]){
-            case 0:
-                buf[0] = 119;
-                break;
-            case 1:
-                buf[0] = 120;
-                break;
-            default:
-                buf[0] -= 2;
-        }*/
 
         int cnt = 0;
         bool end_flg = true;

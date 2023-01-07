@@ -20,7 +20,7 @@ pico_sdk_init()
 # Add executable. Default name is the project name, version 0.1
 include_directories(resources)
 
-add_executable(touchmatrix-pico touchmatrix-pico.cpp)
+add_executable(touchmatrix-pico touchmatrix-pico.cpp ADS1114.cpp ADS8866.cpp)
 
 pico_generate_pio_header(touchmatrix-pico ${PROJECT_SOURCE_DIR}/pio/shift_register.pio)
 pico_generate_pio_header(touchmatrix-pico ${PROJECT_SOURCE_DIR}/pio/ws2812.pio)
@@ -32,11 +32,12 @@ pico_enable_stdio_uart(touchmatrix-pico 0)
 pico_enable_stdio_usb(touchmatrix-pico 1)
 
 # Add the standard library to the build
-target_link_libraries(touchmatrix-pico pico_stdlib hardware_pio)
+target_link_libraries(touchmatrix-pico pico_stdlib)
 
 # Add any user requested libraries
 target_link_libraries(touchmatrix-pico
         hardware_spi
+        hardware_i2c
         hardware_pio
         pico_multicore
         )
