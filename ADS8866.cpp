@@ -27,7 +27,7 @@ namespace ex_adc {
         gpio_put(pin_cs, 1);
     }
 
-    uint16_t ADS8866::read() const {
+    void ADS8866::read(uint16_t *val) const {
         uint16_t buffer = 0x00;
 
         // Conversion Result of (sensor_ch, led on)
@@ -42,11 +42,9 @@ namespace ex_adc {
 
         gpio_put(cs, 0);
         asm volatile("nop \n nop \n nop");
-        spi_read16_blocking(spiInst, 0, &buffer, 1);
+        spi_read16_blocking(spiInst, 0, val, 1);
         asm volatile("nop \n nop \n nop");
         gpio_put(cs, 1);
-
-        return buffer;
     }
 
 } // ex_adc

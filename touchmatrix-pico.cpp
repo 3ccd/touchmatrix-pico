@@ -11,7 +11,7 @@
 #include "hardware/pio.h"
 #include "pico/multicore.h"
 
-#include "ADS1114.h"
+#include "ADS8866.h"
 #include "shift_register.pio.h"
 #include "ws2812.pio.h"
 
@@ -91,6 +91,7 @@ uint32_t mux_mask;
 uint32_t ir_buffer[DC_COUNT];
 
 uint16_t buffer = 0;
+uint16_t ext_light = 0;
 
 void core1_data_transfer(){
     multicore_fifo_push_blocking(CORE_STARTED);
@@ -193,13 +194,22 @@ inline void ir_led_enable(bool enable){
     gpio_put(PIN_LD_BLANK, !enable);
 }
 
+void acquisition(ex_adc::ADS8866 *adc, uint16_t *dst){
+    for (int i = 0; i < 5; i++){
+        sleep_us(50);
+        adc->read(dst);
+    }
+    *dst = *dst / 5;
+}
+
 int main()
 {
     stdio_init_all();
 
     // ADC init
-    ex_adc::ADS1114 adc = ex_adc::ADS1114(i2c_default, PIN_SDA, PIN_SCL);
-    adc.init(I2C_ADDR, ex_adc::DATA_RATE_860, ex_adc::PGA_512);
+    ex_adc::ADS8866 adc = ex_adc::ADS8866(spi0, PIN_MISO, PIN_CS, PIN_SCK, PIN_MOSI);
+    // ex_adc::ADS1114 adc = ex_adc::ADS1144(i2c_default, PIN_SDA, PIN_SCL);
+    // adc.init(I2C_ADDR, ex_adc::DATA_RATE_860, ex_adc::PGA_512);
 
     // initialize decoder gpio
     dc_mask = 0x00;
@@ -236,7 +246,7 @@ int main()
     ws2812_program_init(rgb_pio, sm, offset, PIN_RGB, RGB_CLOCK, RGB_IS_RGBW);
 
     // initialize variable
-    uint16_t sensor_ch = 0;
+    uint16_t sensor_ch = 30;
     uint8_t mode = 0;
 #ifdef OP_1LED
     const uint8_t mc = 0;
@@ -289,20 +299,16 @@ int main()
         ir_led_enable(false);
         put_ir(pio);
 
-        //sleep_us(50);
-
-        //uint16_t tmp = adc.read();
+        acquisition(&adc, &ext_light);
 
         ir_led_enable(true);
-        sleep_ms(3);
-        //sleep_us(20);
-        adc.read(&buffer);
+        acquisition(&adc, &buffer);
 
-        /*if(buffer > tmp){
-            buffer -= tmp;
+        if(buffer > ext_light){
+            buffer -= ext_light;
         }else{
             buffer = 0x0000;
-        }*/
+        }
         uint32_t mg = (sensor_ch << 24)| (mode << 16) | buffer;
         multicore_fifo_push_blocking(mg);
 

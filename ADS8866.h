@@ -16,7 +16,7 @@ namespace ex_adc {
         spi_inst *spiInst;
     public:
         ADS8866(spi_inst *spiInstr, uint8_t pin_miso, uint8_t pin_cs, uint8_t pin_clk, uint8_t pin_mosi);
-        [[nodiscard]] uint16_t read() const;
+        void read(uint16_t *val) const;
     };
 
 } // ex_adc
