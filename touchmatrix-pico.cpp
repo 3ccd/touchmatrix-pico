@@ -28,8 +28,8 @@
 #endif
 
 // operation mode (1LED or 4LED)
-//#define OP_4LED
-#define OP_1LED
+#define OP_4LED
+//#define OP_1LED
 
 // util
 #define MHZ 1000000
@@ -164,10 +164,10 @@ void set_ir_from_map(uint8_t num, uint8_t mode){
 #elif defined(TM_3_DISCOVERY)
     uint32_t map = led_map_tm3dis[num];
 #endif
-    if(mode | 0b1000) set_ir((map >> 24) & 0xFF);
-    if(mode | 0b0100) set_ir((map >> 16) & 0xFF);
-    if(mode | 0b0010) set_ir((map >> 8) & 0xFF);
-    if(mode | 0b0001) set_ir(map & 0xFF);
+    if(mode & 0b1000) set_ir((map >> 24) & 0xFF);
+    if(mode & 0b0100) set_ir((map >> 16) & 0xFF);
+    if(mode & 0b0010) set_ir((map >> 8) & 0xFF);
+    if(mode & 0b0001) set_ir(map & 0xFF);
 }
 
 void clear_ir(){
