@@ -11,7 +11,7 @@
 #include "hardware/pio.h"
 #include "pico/multicore.h"
 
-#include "ADS8866.h"
+#include "../include/ADS8866.h"
 #include "shift_register.pio.h"
 #include "ws2812.pio.h"
 
@@ -22,7 +22,7 @@
 
 #elif defined(TM_3_DISCOVERY)
 
-#include "resources/led_map_tm3dis.h"
+#include "led_map_tm3dis.h"
 #define SENSOR_COUNT 61
 
 #endif
@@ -195,11 +195,11 @@ inline void ir_led_enable(bool enable){
 }
 
 void acquisition(ex_adc::ADS8866 *adc, uint16_t *dst){
-    for (int i = 0; i < 5; i++){
+    for (int i = 0; i < 4; i++){
         sleep_us(50);
         adc->read(dst);
     }
-    *dst = *dst / 5;
+    *dst = *dst >> 2;
 }
 
 int main()
@@ -293,6 +293,30 @@ int main()
             case 4:
                 set_ir_from_map(sensor_ch, LED_SOUTH);
                 break;
+            /*case 5:
+                set_ir(sensor_ch - 17);
+                set_ir(sensor_ch - 12);
+                set_ir(sensor_ch - 11);
+                set_ir(sensor_ch - 6);
+                break;
+            case 6:
+                set_ir(sensor_ch - 15);
+                set_ir(sensor_ch - 10);
+                set_ir(sensor_ch - 9);
+                set_ir(sensor_ch - 4);
+                break;
+            case 7:
+                set_ir(sensor_ch + 5);
+                set_ir(sensor_ch + 10);
+                set_ir(sensor_ch + 11);
+                set_ir(sensor_ch + 16);
+                break;
+            case 8:
+                set_ir(sensor_ch + 7);
+                set_ir(sensor_ch + 12);
+                set_ir(sensor_ch + 13);
+                set_ir(sensor_ch + 18);
+                break;*/
             default:
                 break;
         }

@@ -2,7 +2,7 @@
 // Created by ura on 1/7/23.
 //
 
-#include "ADS1114.h"
+#include "../include/ADS1114.h"
 
 namespace ex_adc {
 
