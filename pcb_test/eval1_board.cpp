@@ -1,9 +1,10 @@
+//
+// Created by ura on 3/28/23.
+//
 
 // TM board version (load led map)
-//#define TM_2
-#define TM_3_DISCOVERY
-#define BOARD_VER 3
-#define CHAIN     1
+#define TM_2
+//#define TM_3_DISCOVERY
 
 #include <cstdio>
 #include <pico/binary_info.h>
@@ -11,26 +12,11 @@
 #include "hardware/gpio.h"
 #include "hardware/spi.h"
 #include "hardware/pio.h"
-#include "pico/multicore.h"
 
 #include "../include/ADS8866.h"
 #include "shift_register.pio.h"
-#include "ws2812.pio.h"
-
-#ifdef TM_2
-
-#include "led_map.h"
-#define SENSOR_COUNT 121
-
-#elif defined(TM_3_DISCOVERY)
-
-#include "led_map_tm3dis.h"
-#define SENSOR_COUNT 61
-
-#endif
 
 // operation mode (1LED or 4LED)
-#define OP_MODES    5
 #define OP_4LED
 //#define OP_1LED
 
@@ -57,10 +43,10 @@
 #define PIN_MOSI 3
 
 // LED Driver defines
-#define PIN_LD_SIN      13
-#define PIN_LD_SCLK     12
-#define PIN_LD_LAT      11
-#define PIN_LD_BLANK    10
+#define PIN_LD_SIN      11
+#define PIN_LD_SCLK     10
+#define PIN_LD_LAT      12
+#define PIN_LD_BLANK    13
 
 // Multiplexer defines
 #define PIN_MUX_S0      6
@@ -88,64 +74,27 @@
 #define RGB_CLOCK       800000
 #define RGB_IS_RGBW     false
 
-// PUT INFO Timing
-#define INFO_TIM        2000
-
 
 uint32_t dc_mask;
 uint32_t mux_mask;
 uint32_t ir_buffer[DC_COUNT];
-uint32_t board_info = 0xff << 24 | BOARD_VER << 16 | CHAIN << 8 | SENSOR_COUNT;
 
 uint16_t buffer = 0;
 uint16_t ext_light = 0;
-uint32_t timing_cnt = 0;
 
-void core1_data_transfer(){
-    multicore_fifo_push_blocking(CORE_STARTED);
-
-    while(true){
-        uint32_t data;
-        if(timing_cnt == INFO_TIM){
-            data = board_info;
-            timing_cnt = 0;
-        }else{
-            data = multicore_fifo_pop_blocking();
-        }
-        timing_cnt++;
-
-        uint8_t buf[4] = {};
-        buf[0] = (data >> 24) & 0xFF;
-        buf[1] = (data >> 16) & 0xFF;
-        buf[2] = (data >> 8) & 0xFF;
-        buf[3] = data & 0xFF;
-
-        int cnt = 0;
-        bool end_flg = true;
-        while(end_flg){
-            switch(buf[cnt]) {
-                case DATA_END:
-                    putchar_raw(DATA_ESC);
-                    putchar_raw(DATA_ESC_END);
-                    break;
-                case DATA_ESC:
-                    putchar_raw(DATA_ESC);
-                    putchar_raw(DATA_ESC_ESC);
-                    break;
-                default:
-                    putchar_raw(buf[cnt]);
-                    break;
-            }
-            cnt++;
-            if(cnt == 4){
-                putchar_raw(DATA_END);
-                end_flg = false;
-            }
-        }
-
-    }
-}
-
+static uint32_t led_map[] = {
+        0x00020104, // PD1 VF
+        0x0c0b0aff, // PR1 VF
+        0x01040306, // PD2 VF
+        0x090b0dff, // PR2 VF
+        0x090a0c0d, // PR3 VF
+        0x02050407, // PD3 VF
+        0xffffffff, // NC
+        0xffffffff, // NC
+        0x090b0dff, // PR4
+        0x0a0b0cff, // PR5
+        0x04070608 // PD4
+};
 
 inline void set_dc(uint8_t num){
     num |= 0b00001000;      // ENABLE (HIGH)
@@ -170,15 +119,11 @@ void set_ch(uint16_t num){
 
 void set_ir(uint8_t num){
     uint8_t ld_num = (num >> 5) & 0b00000011;
-    ir_buffer[ld_num] |= 0x80000000 >> (num & 0b00011111);
+    ir_buffer[ld_num] |= 0x00000001 << (num & 0b00011111);
 }
 
 void set_ir_from_map(uint8_t num, uint8_t mode){
-#ifdef TM_2
     uint32_t map = led_map[num];
-#elif defined(TM_3_DISCOVERY)
-    uint32_t map = led_map_tm3dis[num];
-#endif
     if(mode & 0b1000) set_ir((map >> 24) & 0xFF);
     if(mode & 0b0100) set_ir((map >> 16) & 0xFF);
     if(mode & 0b0010) set_ir((map >> 8) & 0xFF);
@@ -192,17 +137,11 @@ void clear_ir(){
 }
 
 void put_ir(PIO pio){
+
     pio_sm_put_blocking(pio, 0, ir_buffer[3]);
     pio_sm_put_blocking(pio, 0, ir_buffer[2]);
     pio_sm_put_blocking(pio, 0, ir_buffer[1]);
     pio_sm_put_blocking(pio, 0, ir_buffer[0]);
-}
-
-void put_rgb(PIO pio, uint8_t r, uint8_t b, uint8_t g){
-    uint32_t tmp_color = ((uint32_t) (r) << 8) |
-                         ((uint32_t) (g) << 16) |
-                         (uint32_t) (b);
-    pio_sm_put_blocking(pio, 0, tmp_color << 8u);
 }
 
 inline void ir_led_enable(bool enable){
@@ -210,30 +149,16 @@ inline void ir_led_enable(bool enable){
 }
 
 void acquisition(ex_adc::ADS8866 *adc, uint16_t *dst){
-    uint32_t tmp = 0;
-    uint16_t ret = 0;
-    sleep_us(50);
-    for (int i = 0; i < 16; i++){
+    /*uint32_t sum = 0;
+    uint16_t tmp = 0;
+    for (int i = 0; i < 64; i++){
         sleep_us(1);
-        adc->read(&ret);
-        tmp += ret;
-    }
-    *dst = tmp >> 4;
-}
-
-void rgb_led(PIO rgb_pio, int t){
-    // rgb_led
-    for (uint i = 0; i < 144; ++i) {
-        uint x = (i + (t >> 1)) % 64;
-        if (x < 10)
-            put_rgb(rgb_pio, 0xff, 0, 0);
-        else if (x >= 15 && x < 25)
-            put_rgb(rgb_pio, 0, 0xff, 0);
-        else if (x >= 30 && x < 40)
-            put_rgb(rgb_pio, 0, 0, 0xff);
-        else
-            put_rgb(rgb_pio, 0, 0, 0);
-    }
+        adc->read(&tmp);
+        sum += tmp;
+    }s
+    *dst = sum >> 6;*/
+    sleep_us(10);
+    adc->read(dst);
 }
 
 int main()
@@ -264,20 +189,14 @@ int main()
     gpio_set_dir_out_masked(mux_mask);  // set direction (out)
 
     // initialize pio
-    PIO pio = pio0;
+    /*PIO pio = pio0;
     uint sm = pio_claim_unused_sm(pio, true);
     uint offset = pio_add_program(pio, &shift_register_program);
     pio_shift_register_init(pio, sm, offset, PIN_LD_SIN, 1, 0, 0, PIN_LD_LAT, 2);
     // led driver enable
     gpio_init(PIN_LD_BLANK);
     gpio_set_dir(PIN_LD_BLANK, GPIO_OUT);
-    gpio_put(PIN_LD_BLANK, 0);
-
-    // initialize pio no.2
-    PIO rgb_pio pio1;
-    sm = pio_claim_unused_sm(rgb_pio, true);
-    offset = pio_add_program(rgb_pio, &ws2812_program);
-    ws2812_program_init(rgb_pio, sm, offset, PIN_RGB, RGB_CLOCK, RGB_IS_RGBW);
+    gpio_put(PIN_LD_BLANK, 0);*/
 
     // initialize variable
     uint16_t sensor_ch = 0;
@@ -290,24 +209,30 @@ int main()
 
     clear_ir();
 
-    // core1 init
-    multicore_launch_core1(core1_data_transfer);
-    uint32_t ret = multicore_fifo_pop_blocking();
-    if(ret == CORE_STARTED){
-
-    }
-
     // pilot lamp
     gpio_init(25);
     gpio_set_dir(25, GPIO_OUT);
     gpio_put(25, true);
 
-    int t = 0;
+    //bool rgb_on = false;
+
+    // com for led driver via spi
+    spi_init(spi1, 3 * 1000000);
+    //gpio_set_function(PIN_LD_LAT, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_LD_SCLK,  GPIO_FUNC_SPI);
+    gpio_set_function(PIN_LD_SIN, GPIO_FUNC_SPI);
+    gpio_init(PIN_LD_LAT);
+    gpio_init(PIN_LD_BLANK);
+    gpio_set_dir(PIN_LD_LAT, GPIO_OUT);
+    gpio_set_dir(PIN_LD_BLANK, GPIO_OUT);
+    gpio_put(PIN_LD_LAT, false);
+    gpio_put(PIN_LD_BLANK, false);
+
+    spi_set_format(spi1, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    uint16_t buf[1] = {0x8888};
+
 
     while(true){
-
-        // set decoder and multiplexer
-        set_ch(sensor_ch);
 
         // set led driver
         clear_ir();
@@ -331,32 +256,37 @@ int main()
                 break;
         }
         ir_led_enable(false);
-        put_ir(pio);
 
-        acquisition(&adc, &ext_light);
+        buf[0] = (ir_buffer[0] & 0x0000FFFF);
+        spi_write16_blocking(spi1, buf, 1);
+        gpio_put(PIN_LD_LAT, 1);
+        asm volatile("nop \n nop \n nop");
+        gpio_put(PIN_LD_LAT, 0);
+
+        //acquisition(&adc, &ext_light);
+
+        // set decoder and multiplexer
+        set_ch(sensor_ch);
 
         ir_led_enable(true);
+        sleep_us(50);
         acquisition(&adc, &buffer);
 
-        if(buffer > ext_light){
-            buffer -= ext_light;
-        }else{
-            buffer = 0x0000;
-        }
-        uint32_t mg = (sensor_ch << 24)| (mode << 16) | buffer;
-        multicore_fifo_push_blocking(mg);
+        printf("%d, ", buffer);
 
         // increment
         mode++;
         if(mode > mc){
             mode = 0;
             sensor_ch++;
-            if(sensor_ch == SENSOR_COUNT){
+            if(sensor_ch == 11){
+                printf("\n");
+                /*rgb_on = !rgb_on;
+                for(int i = 0; i < 6; i++){
+                    put_rgb(rgb_pio, (int)rgb_on * 255, 0, 0);
+                }*/
                 sensor_ch = 0;
             }
-
-            rgb_led(rgb_pio, t);
-            t++;
         }
 
     }
