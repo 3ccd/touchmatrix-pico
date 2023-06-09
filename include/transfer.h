@@ -2,6 +2,7 @@
 // Created by ura on 6/9/23.
 //
 
+#include "pico/stdlib.h"
 #include "pico/multicore.h"
 
 #ifndef TOUCHMATRIX_PICO_TRANSFER_H
@@ -23,7 +24,7 @@ namespace transfer{
         uint8_t sensors;
     };
 
-    void data_transfer_via_usb(brd_info *info);
+    void data_transfer_via_usb(void);
     void data_transfer_via_i2c(brd_info *info);
 
 }

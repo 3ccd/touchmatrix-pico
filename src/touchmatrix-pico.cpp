@@ -14,6 +14,7 @@
 #include "pico/multicore.h"
 
 #include "../include/ADS8866.h"
+#include "../include/transfer.h"
 #include "shift_register.pio.h"
 #include "ws2812.pio.h"
 
@@ -100,6 +101,7 @@ uint32_t board_info = 0xff << 24 | BOARD_VER << 16 | CHAIN << 8 | SENSOR_COUNT;
 uint16_t buffer = 0;
 uint16_t ext_light = 0;
 uint32_t timing_cnt = 0;
+
 
 void core1_data_transfer(){
     multicore_fifo_push_blocking(CORE_STARTED);

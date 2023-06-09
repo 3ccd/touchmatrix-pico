@@ -4,7 +4,9 @@
 
 #include "../include/transfer.h"
 
-void transfer::data_transfer_via_usb(brd_info *info){
+void transfer::data_transfer_via_usb(void){
+    uint32_t ret = multicore_fifo_pop_blocking();
+
     uint32_t timing_cnt = 0;
     uint32_t board_info = 0xff << 24 | info->version << 16 | info->chain << 8 | info->sensors;
 
