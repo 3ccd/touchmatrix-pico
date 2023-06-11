@@ -19,6 +19,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 include_directories(config)
+include_directories(include)
 file(GLOB tm_src "src/*.cpp" "include/*.h")
 
 add_executable(touchmatrix-pico ${tm_src})

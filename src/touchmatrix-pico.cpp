@@ -14,8 +14,8 @@
 
 #include "common.h"
 
-#include "../include/ADS8866.h"
-#include "../include/transfer.h"
+#include "ADS8866.h"
+#include "transfer.h"
 #include "shift_register.pio.h"
 #include "ws2812.pio.h"
 
