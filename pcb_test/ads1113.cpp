@@ -22,7 +22,7 @@
 
 #elif defined(TM_3_DISCOVERY)
 
-#include "../resources/led_map_tm3dis.h"
+#include "../resources/tm3dis_config.h"
 #define SENSOR_COUNT 61
 
 #endif

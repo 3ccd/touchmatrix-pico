@@ -5,6 +5,38 @@
 #ifndef TOUCHMATRIX_PICO_LED_MAP_H
 #define TOUCHMATRIX_PICO_LED_MAP_H
 
+
+#define BOARD_VER 2
+
+// SPI Defines
+#define PIN_MISO 4
+#define PIN_CS   5
+#define PIN_SCK  2
+#define PIN_MOSI 3
+
+// LED Driver defines
+#define PIN_LD_SIN      13
+#define PIN_LD_SCLK     12
+#define PIN_LD_LAT      11
+#define PIN_LD_BLANK    10
+
+// Multiplexer defines
+#define PIN_MUX_S0      6
+#define PIN_MUX_S1      7
+#define PIN_MUX_S2      8
+#define PIN_MUX_S3      9
+
+// Decoder defines
+#define PIN_DC_A        18
+#define PIN_DC_B        19
+#define PIN_DC_C        20
+#define PIN_DC_ENABLE   21
+
+// LED Driver Settings
+#define DC_COUNT        4
+
+#define SENSOR_COUNT 121
+
 static uint32_t led_map[] = {
         0xff00010b,
         0xff01020c,

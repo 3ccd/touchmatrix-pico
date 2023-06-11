@@ -2,7 +2,6 @@
 // TM board version (load led map)
 //#define TM_2
 #define TM_3_DISCOVERY
-#define BOARD_VER 3
 #define CHAIN     1
 
 #include <cstdio>
@@ -13,74 +12,12 @@
 #include "hardware/pio.h"
 #include "pico/multicore.h"
 
+#include "common.h"
+
 #include "../include/ADS8866.h"
 #include "../include/transfer.h"
 #include "shift_register.pio.h"
 #include "ws2812.pio.h"
-
-#ifdef TM_2
-
-#include "led_map.h"
-#define SENSOR_COUNT 121
-
-#elif defined(TM_3_DISCOVERY)
-
-#include "led_map_tm3dis.h"
-#define SENSOR_COUNT 61
-
-#endif
-
-// operation mode (1LED or 4LED)
-#define OP_MODES    5
-#define OP_4LED
-//#define OP_1LED
-
-// util
-#define MHZ 1000000
-
-// I2C ADC defines
-#define PIN_SCL         17
-#define PIN_SDA         16
-#define I2C_ADDR        0b1001000
-
-// SPI Defines
-#define SPI_PORT spi0
-#define PIN_MISO 4
-#define PIN_CS   5
-#define PIN_SCK  2
-#define PIN_MOSI 3
-
-// LED Driver defines
-#define PIN_LD_SIN      13
-#define PIN_LD_SCLK     12
-#define PIN_LD_LAT      11
-#define PIN_LD_BLANK    10
-
-// Multiplexer defines
-#define PIN_MUX_S0      6
-#define PIN_MUX_S1      7
-#define PIN_MUX_S2      8
-#define PIN_MUX_S3      9
-
-// Decoder defines
-#define PIN_DC_A        18
-#define PIN_DC_B        19
-#define PIN_DC_C        20
-#define PIN_DC_ENABLE   21
-
-// LED Driver Settings
-#define DC_COUNT        4
-
-// IR LED Mode
-#define LED_NORTH       1
-#define LED_WEST        2
-#define LED_EAST        4
-#define LED_SOUTH       8
-
-// RGB LED defines
-#define PIN_RGB         15
-#define RGB_CLOCK       800000
-#define RGB_IS_RGBW     false
 
 
 uint32_t dc_mask;
@@ -128,11 +65,8 @@ void set_ir(uint8_t num){
 }
 
 void set_ir_from_map(uint8_t num, uint8_t mode){
-#ifdef TM_2
     uint32_t map = led_map[num];
-#elif defined(TM_3_DISCOVERY)
-    uint32_t map = led_map_tm3dis[num];
-#endif
+
     if(mode & 0b1000) set_ir((map >> 24) & 0xFF);
     if(mode & 0b0100) set_ir((map >> 16) & 0xFF);
     if(mode & 0b0010) set_ir((map >> 8) & 0xFF);
@@ -236,11 +170,7 @@ int main()
     // initialize variable
     uint16_t sensor_ch = 0;
     uint8_t mode = 0;
-#ifdef OP_1LED
-    const uint8_t mc = 0;
-#elif defined(OP_4LED)
-    const uint8_t mc = 4;
-#endif
+    const uint8_t mc = OP_MODES;
 
     clear_ir();
 

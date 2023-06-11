@@ -2,10 +2,52 @@
 // Created by ura on 11/16/22.
 //
 
-#ifndef TOUCHMATRIX_PICO_LED_MAP_TM3DIS_H
-#define TOUCHMATRIX_PICO_LED_MAP_TM3DIS_H
+#ifndef TOUCHMATRIX_PICO_TM3DIS_CONFIG_H
+#define TOUCHMATRIX_PICO_TM3DIS_CONFIG_H
 
-static uint32_t led_map_tm3dis[] = {
+
+#define BOARD_VER 3
+
+// I2C ADC defines
+#define PIN_SCL         17
+#define PIN_SDA         16
+#define I2C_ADDR        0b1001000
+
+// SPI Defines
+#define PIN_MISO 4
+#define PIN_CS   5
+#define PIN_SCK  2
+#define PIN_MOSI 3
+
+// LED Driver defines
+#define PIN_LD_SIN      13
+#define PIN_LD_SCLK     12
+#define PIN_LD_LAT      11
+#define PIN_LD_BLANK    10
+
+// Multiplexer defines
+#define PIN_MUX_S0      6
+#define PIN_MUX_S1      7
+#define PIN_MUX_S2      8
+#define PIN_MUX_S3      9
+
+// Decoder defines
+#define PIN_DC_A        18
+#define PIN_DC_B        19
+#define PIN_DC_C        20
+#define PIN_DC_ENABLE   21
+
+// LED Driver Settings
+#define DC_COUNT        4
+
+// RGB LED defines
+#define PIN_RGB         15
+#define RGB_CLOCK       800000
+#define RGB_IS_RGBW     false
+
+#define SENSOR_COUNT 61
+
+static uint32_t led_map[] = {
         0xff000106,
         0xff010207,
         0xff020308,
@@ -69,4 +111,4 @@ static uint32_t led_map_tm3dis[] = {
         0x373c3d42
 };
 
-#endif //TOUCHMATRIX_PICO_LED_MAP_TM3DIS_H
+#endif //TOUCHMATRIX_PICO_TM3DIS_CONFIG_H
