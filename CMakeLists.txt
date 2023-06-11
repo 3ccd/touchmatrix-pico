@@ -19,8 +19,9 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 include_directories(resources)
+file(GLOB tm_src "src/*.cpp" "include/*.h")
 
-add_executable(touchmatrix-pico src/touchmatrix-pico.cpp src/ADS1114.cpp src/ADS8866.cpp src/transfer.cpp)
+add_executable(touchmatrix-pico ${tm_src})
 
 pico_generate_pio_header(touchmatrix-pico ${PROJECT_SOURCE_DIR}/pio/shift_register.pio)
 pico_generate_pio_header(touchmatrix-pico ${PROJECT_SOURCE_DIR}/pio/ws2812.pio)

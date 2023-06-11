@@ -38,13 +38,6 @@
 // util
 #define MHZ 1000000
 
-// multicore defines
-#define CORE_STARTED    123
-#define DATA_END        0xC0    // slip compatible
-#define DATA_ESC        0xDB
-#define DATA_ESC_END    0xDC
-#define DATA_ESC_ESC    0xDD
-
 // I2C ADC defines
 #define PIN_SCL         17
 #define PIN_SDA         16
@@ -89,65 +82,24 @@
 #define RGB_CLOCK       800000
 #define RGB_IS_RGBW     false
 
-// PUT INFO Timing
-#define INFO_TIM        2000
-
 
 uint32_t dc_mask;
 uint32_t mux_mask;
 uint32_t ir_buffer[DC_COUNT];
-uint32_t board_info = 0xff << 24 | BOARD_VER << 16 | CHAIN << 8 | SENSOR_COUNT;
 
 uint16_t buffer = 0;
 uint16_t ext_light = 0;
-uint32_t timing_cnt = 0;
 
-
-void core1_data_transfer(){
-    multicore_fifo_push_blocking(CORE_STARTED);
-
-    while(true){
-        uint32_t data;
-        if(timing_cnt == INFO_TIM){
-            data = board_info;
-            timing_cnt = 0;
-        }else{
-            data = multicore_fifo_pop_blocking();
-        }
-        timing_cnt++;
-
-        uint8_t buf[4] = {};
-        buf[0] = (data >> 24) & 0xFF;
-        buf[1] = (data >> 16) & 0xFF;
-        buf[2] = (data >> 8) & 0xFF;
-        buf[3] = data & 0xFF;
-
-        int cnt = 0;
-        bool end_flg = true;
-        while(end_flg){
-            switch(buf[cnt]) {
-                case DATA_END:
-                    putchar_raw(DATA_ESC);
-                    putchar_raw(DATA_ESC_END);
-                    break;
-                case DATA_ESC:
-                    putchar_raw(DATA_ESC);
-                    putchar_raw(DATA_ESC_ESC);
-                    break;
-                default:
-                    putchar_raw(buf[cnt]);
-                    break;
-            }
-            cnt++;
-            if(cnt == 4){
-                putchar_raw(DATA_END);
-                end_flg = false;
-            }
-        }
-
+void core1_init(){
+    transfer::brd_info b_info = {};
+    {
+        b_info.sensors = SENSOR_COUNT;
+        b_info.version = BOARD_VER;
+        b_info.chain = CHAIN;
     }
-}
 
+    transfer::start_core(b_info);
+}
 
 inline void set_dc(uint8_t num){
     num |= 0b00001000;      // ENABLE (HIGH)
@@ -293,11 +245,7 @@ int main()
     clear_ir();
 
     // core1 init
-    multicore_launch_core1(core1_data_transfer);
-    uint32_t ret = multicore_fifo_pop_blocking();
-    if(ret == CORE_STARTED){
-
-    }
+    core1_init();
 
     // pilot lamp
     gpio_init(25);

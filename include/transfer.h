@@ -11,12 +11,12 @@
 namespace transfer{
 
     // multicore defines
-    static const uint8_t    CORE_STARTED    =   123;
-    static const uint8_t    DATA_END        =   0xC0;    // slip compatible
-    static const uint8_t    DATA_ESC        =   0xDB;
-    static const uint8_t    DATA_ESC_END    =   0xDC;
-    static const uint8_t    DATA_ESC_ESC    =   0xDD;
-    static const uint32_t   INFO_TIMING     =   2000;
+    const uint8_t    CORE_STARTED    =   123;
+    const uint8_t    DATA_END        =   0xC0;    // slip compatible
+    const uint8_t    DATA_ESC        =   0xDB;
+    const uint8_t    DATA_ESC_END    =   0xDC;
+    const uint8_t    DATA_ESC_ESC    =   0xDD;
+    const uint32_t   INFO_TIMING     =   2000;
 
     struct brd_info{
         uint8_t version;
@@ -24,7 +24,8 @@ namespace transfer{
         uint8_t sensors;
     };
 
-    void data_transfer_via_usb(void);
+    void data_transfer_via_usb();
+    void start_core(brd_info bi);
     void data_transfer_via_i2c(brd_info *info);
 
 }

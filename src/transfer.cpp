@@ -4,11 +4,15 @@
 
 #include "../include/transfer.h"
 
-void transfer::data_transfer_via_usb(void){
-    uint32_t ret = multicore_fifo_pop_blocking();
+
+// board meta-data for sharing for other core
+static transfer::brd_info b_info = {};
+
+
+void transfer::data_transfer_via_usb(){
 
     uint32_t timing_cnt = 0;
-    uint32_t board_info = 0xff << 24 | info->version << 16 | info->chain << 8 | info->sensors;
+    uint32_t board_info = 0xff << 24 | b_info.version << 16 | b_info.chain << 8 | b_info.sensors;
 
     multicore_fifo_push_blocking(CORE_STARTED);
 
@@ -50,6 +54,17 @@ void transfer::data_transfer_via_usb(void){
                 end_flg = false;
             }
         }
+
+    }
+}
+
+void transfer::start_core(brd_info bi){
+    b_info = bi;
+
+    // core1 init
+    multicore_launch_core1(transfer::data_transfer_via_usb);
+    uint32_t ret = multicore_fifo_pop_blocking();
+    if(ret == CORE_STARTED){
 
     }
 }
