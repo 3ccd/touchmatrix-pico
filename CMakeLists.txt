@@ -41,6 +41,7 @@ target_link_libraries(touchmatrix-pico
         hardware_spi
         hardware_i2c
         hardware_pio
+        hardware_dma
         pico_multicore
         )
 

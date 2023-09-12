@@ -1,7 +1,8 @@
 
 // TM board version (load led map)
 //#define TM_2
-#define TM_3_DISCOVERY
+//#define TM_3_DISCOVERY
+#define TM_4
 #define CHAIN     1
 
 #include <cstdio>
@@ -10,6 +11,7 @@
 #include "hardware/gpio.h"
 #include "hardware/spi.h"
 #include "hardware/pio.h"
+#include "hardware/dma.h"
 #include "pico/multicore.h"
 
 #include "common.h"
@@ -23,9 +25,12 @@
 uint32_t dc_mask;
 uint32_t mux_mask;
 uint32_t ir_buffer[DC_COUNT];
+uint32_t rgb_buffer[256];
 
 uint16_t buffer = 0;
 uint16_t ext_light = 0;
+
+int rgb_dma_ch;
 
 void core1_init(){
     transfer::brd_info b_info = {};
@@ -86,12 +91,6 @@ void put_ir(PIO pio){
     pio_sm_put_blocking(pio, 0, ir_buffer[0]);
 }
 
-void put_rgb(PIO pio, uint8_t r, uint8_t b, uint8_t g){
-    uint32_t tmp_color = ((uint32_t) (r) << 8) |
-                         ((uint32_t) (g) << 16) |
-                         (uint32_t) (b);
-    pio_sm_put_blocking(pio, 0, tmp_color << 8u);
-}
 
 inline void ir_led_enable(bool enable){
     gpio_put(PIN_LD_BLANK, !enable);
@@ -101,27 +100,17 @@ void acquisition(ex_adc::ADS8866 *adc, uint16_t *dst){
     uint32_t tmp = 0;
     uint16_t ret = 0;
     sleep_us(50);
-    for (int i = 0; i < 16; i++){
+    for (int i = 0; i < 8; i++){
         sleep_us(1);
         adc->read(&ret);
         tmp += ret;
     }
-    *dst = tmp >> 4;
+    *dst = tmp >> 3;
 }
 
-void rgb_led(PIO rgb_pio, int t){
-    // rgb_led
-    for (uint i = 0; i < 144; ++i) {
-        uint x = (i + (t >> 1)) % 64;
-        if (x < 10)
-            put_rgb(rgb_pio, 0xff, 0, 0);
-        else if (x >= 15 && x < 25)
-            put_rgb(rgb_pio, 0, 0xff, 0);
-        else if (x >= 30 && x < 40)
-            put_rgb(rgb_pio, 0, 0, 0xff);
-        else
-            put_rgb(rgb_pio, 0, 0, 0);
-    }
+void dma_handler(){
+    dma_channel_set_read_addr(rgb_dma_ch, rgb_buffer, true); // trig dma
+    dma_hw->ints0 = 1u << rgb_dma_ch; // clear irq
 }
 
 int main()
@@ -162,10 +151,37 @@ int main()
     gpio_put(PIN_LD_BLANK, 0);
 
     // initialize pio no.2
+#if defined(TM_3_DISCOVERY)
     PIO rgb_pio pio1;
     sm = pio_claim_unused_sm(rgb_pio, true);
     offset = pio_add_program(rgb_pio, &ws2812_program);
     ws2812_program_init(rgb_pio, sm, offset, PIN_RGB, RGB_CLOCK, RGB_IS_RGBW);
+
+    for(unsigned long & i : rgb_buffer){
+        i = 0xff880000;
+    }
+
+    rgb_dma_ch = dma_claim_unused_channel(true);
+    dma_channel_config dma_ch_config = dma_channel_get_default_config(rgb_dma_ch);
+    channel_config_set_transfer_data_size(&dma_ch_config, DMA_SIZE_32);
+    channel_config_set_read_increment(&dma_ch_config, true);
+    channel_config_set_write_increment(&dma_ch_config, false);
+    channel_config_set_dreq(&dma_ch_config, pio_get_dreq(rgb_pio, sm, true));
+
+    dma_channel_configure(
+            rgb_dma_ch,
+            &dma_ch_config,
+            &rgb_pio->txf[sm],
+            rgb_buffer,
+            141,
+            false
+            );
+    dma_channel_set_irq0_enabled(rgb_dma_ch, true);
+    irq_set_exclusive_handler(DMA_IRQ_0, dma_handler);
+    irq_set_enabled(DMA_IRQ_0, true);
+
+    dma_handler();
+#endif
 
     // initialize variable
     uint16_t sensor_ch = 0;
@@ -182,7 +198,7 @@ int main()
     gpio_set_dir(25, GPIO_OUT);
     gpio_put(25, true);
 
-    int t = 0;
+    int_fast8_t t = 0;
 
     while(true){
 
@@ -234,8 +250,8 @@ int main()
             if(sensor_ch == SENSOR_COUNT){
                 sensor_ch = 0;
             }
-
-            rgb_led(rgb_pio, t);
+#if defined(TM_3_DISCOVERY)
+#endif
             t++;
         }
 

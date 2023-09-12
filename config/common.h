@@ -6,7 +6,7 @@
 #define TOUCHMATRIX_PICO_COMMON_H
 
 // operation mode (0 or 4)
-#define OP_MODES    4
+#define OP_MODES    0
 
 // util
 #define MHZ 1000000
@@ -22,6 +22,8 @@
 #include "tm2_config.h"
 #elif defined(TM_3_DISCOVERY)
 #include "tm3dis_config.h"
+#elif defined(TM_4)
+#include "tm4_config.h"
 #endif
 
 #endif //TOUCHMATRIX_PICO_COMMON_H

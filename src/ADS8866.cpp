@@ -11,7 +11,7 @@ namespace ex_adc {
         spiInst = spiInstr;
 
         // SPI initialisation. This example will use SPI at 1MHz.
-        spi_init(spiInst, 3 * 1000000);
+        spi_init(spiInst, 4 * 1000000);
         gpio_set_function(pin_miso, GPIO_FUNC_SPI);
         gpio_set_function(pin_clk,  GPIO_FUNC_SPI);
         gpio_set_function(14, GPIO_FUNC_SPI);
