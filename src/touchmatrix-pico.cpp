@@ -1,32 +1,23 @@
 
-// TM board version (load led map)
-//#define TM_2
-//#define TM_3_DISCOVERY
-#define TM_4
 #define CHAIN     1
 
 #include <cstdio>
 #include <pico/binary_info.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
-#include "hardware/spi.h"
 #include "hardware/pio.h"
 #include "hardware/dma.h"
-#include "hardware/i2c.h"
 #include "pico/multicore.h"
 
 #include "common.h"
 
 #include "ADS8866.h"
 #include "transfer.h"
-#include "shift_register.pio.h"
+#include "peripheral.h"
 #include "ws2812.pio.h"
 
 
-uint32_t dc_mask;
-uint32_t mux_mask;
-uint16_t ir_buffer[DC_COUNT];
-uint32_t rgb_buffer[256];
+uint32_t rgb_buffer[RGB_LEDS];
 
 uint16_t buffer = 0;
 uint16_t ext_light = 0;
@@ -44,135 +35,26 @@ void core1_init(){
     transfer::start_core(b_info);
 }
 
-inline void set_mux(uint8_t num){
-    if(num >= SENSOR_COUNT)return;
-    uint32_t value = 0;
-    value |= (((mux_map[num] >> 0) & 1) << PIN_MUX_S0);
-    value |= (((mux_map[num] >> 1) & 1) << PIN_MUX_S1);
-    value |= (((mux_map[num] >> 2) & 1) << PIN_MUX_S2);
-    value |= (((mux_map[num] >> 3) & 1) << PIN_MUX_S3);
-    value |= ((~(mux_map[num] >> 8) & 1) << PIN_MUX_SEL0);
-    value |= ((~(mux_map[num] >> 9) & 1) << PIN_MUX_SEL1);
-    gpio_put_masked(mux_mask, value);
-}
-
-void set_ir(uint8_t num){
-    uint8_t ld_num = 1 ^ ((num >> 4) & 1);
-    ir_buffer[ld_num] |= 0x0001 << (num & 0b00001111);
-}
-
-void set_ir_from_map(uint8_t num, uint8_t mode){
-    uint32_t map = led_map[num];
-
-    if(mode & 0b1000) set_ir((map >> 24) & 0xFF);
-    if(mode & 0b0100) set_ir((map >> 16) & 0xFF);
-    if(mode & 0b0010) set_ir((map >> 8) & 0xFF);
-    if(mode & 0b0001) set_ir(map & 0xFF);
-}
-
-void clear_ir(){
-    for (unsigned short & i : ir_buffer){
-        i = 0;
-    }
-}
-
-void put_ir(){
-    spi_write16_blocking(spi1, ir_buffer, 2);
-    gpio_put(PIN_LD_LAT, true);
-    asm volatile("nop \n nop \n nop");
-    gpio_put(PIN_LD_LAT, false);
-}
-
-
-inline void ir_led_enable(bool enable){
-    gpio_put(PIN_LD_BLANK, !enable);
-}
-
-void acquisition(ex_adc::ADS8866 *adc, uint16_t *dst){
-    uint32_t tmp = 0;
-    uint16_t ret = 0;
-    sleep_us(50);
-    for (int i = 0; i < 8; i++){
-        sleep_us(1);
-        adc->read(&ret);
-        tmp += ret;
-    }
-    *dst = tmp >> 3;
-}
-
-void dma_handler(){
-    dma_channel_set_read_addr(rgb_dma_ch, rgb_buffer, true); // trig dma
-    dma_hw->ints0 = 1u << rgb_dma_ch; // clear irq
-}
-
-static inline void put_pixel(uint32_t pixel_grb) {
-    pio_sm_put_blocking(pio1, 0, pixel_grb << 8u);
-}
-
-static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) {
-    return
-            ((uint32_t) (r) << 8) |
-            ((uint32_t) (g) << 16) |
-            (uint32_t) (b);
-}
-
-void pattern_snakes(uint len, uint t) {
-    for (uint i = 0; i < len; i++) {
-        put_pixel(urgb_u32(0, 0xff, 0));
-    }
-}
-
-void set_ir_brightness(uint8_t b){
-    i2c_write_blocking(i2c1, POT_ADDR, &b, 1, false);
-}
 
 int main()
 {
     stdio_init_all();
 
-    // ADC init
-    ex_adc::ADS8866 adc = ex_adc::ADS8866(spi0, PIN_MISO, PIN_CS, PIN_SCK, PIN_MOSI);
+    init_adc();
+    init_mux();
+    init_internal_i2c();
+    init_ir();
 
-    // initialize multiplexer gpio
-    mux_mask = 0x00;
-    mux_mask |= 0x01 << PIN_MUX_S0;
-    mux_mask |= 0x01 << PIN_MUX_S1;
-    mux_mask |= 0x01 << PIN_MUX_S2;
-    mux_mask |= 0x01 << PIN_MUX_S3;
-    mux_mask |= 0x01 << PIN_MUX_SEL0;
-    mux_mask |= 0x01 << PIN_MUX_SEL1;
-    gpio_init_mask(mux_mask);       // initialize
-    gpio_set_dir_out_masked(mux_mask);  // set direction (out)
-
-    gpio_put(PIN_MUX_SEL0, true); // select pin is normally high
-    gpio_put(PIN_MUX_SEL1, true);
-
-    // initialize internal i2c
-    i2c_init(i2c1, 100000);
-    gpio_set_function(PIN_SCL, GPIO_FUNC_I2C);
-    gpio_set_function(PIN_SDA, GPIO_FUNC_I2C);
-    //gpio_pull_up(PIN_SCL);    // The value of internal pull-up resistor is too high :(
-    //gpio_pull_up(PIN_SDA);    // Require 1k-ohm external pull-up resistor.
-
-    // initialize spi for ir led driver
-    spi_init(spi1, 1000000);
-    gpio_set_function(PIN_LD_SIN, GPIO_FUNC_SPI);
-    gpio_set_function(PIN_LD_SCLK,  GPIO_FUNC_SPI);
-    gpio_init(PIN_LD_LAT);
-    gpio_init(PIN_LD_BLANK);
-    gpio_set_dir(PIN_LD_LAT, GPIO_OUT);
-    gpio_set_dir(PIN_LD_BLANK, GPIO_OUT);
-    spi_set_format(spi1, 16, SPI_CPOL_1, SPI_CPHA_0, SPI_MSB_FIRST);
-
+    set_ir_brightness(2);
 
     // initialize pio no.2
     PIO rgb_pio pio1;
     uint sm = pio_claim_unused_sm(rgb_pio, true);
     uint offset = pio_add_program(rgb_pio, &ws2812_program);
-    ws2812_program_init(rgb_pio, sm, offset, PIN_RGB, RGB_CLOCK, true);
+    ws2812_program_init(rgb_pio, sm, offset, PIN_RGB, RGB_CLOCK, false);
 
-    /*for(unsigned long & i : rgb_buffer){
-        i = 0xff880000;
+    for(unsigned long & i : rgb_buffer){
+        i = 0x00000000;
     }
 
     rgb_dma_ch = dma_claim_unused_channel(true);
@@ -187,10 +69,10 @@ int main()
             &dma_ch_config,
             &rgb_pio->txf[sm],
             rgb_buffer,
-            141,
+            RGB_LEDS,
             false
             );
-    dma_channel_set_irq0_enabled(rgb_dma_ch, true);
+    /* dma_channel_set_irq0_enabled(rgb_dma_ch, true);
     irq_set_exclusive_handler(DMA_IRQ_0, dma_handler);
     irq_set_enabled(DMA_IRQ_0, true);
 
@@ -211,14 +93,10 @@ int main()
     gpio_set_dir(25, GPIO_OUT);
     gpio_put(25, true);
 
-    int t = 0;
-
     while(true){
 
         // set decoder and multiplexer
         set_mux(sensor_ch);
-
-        set_ir_brightness(1);
 
         // set led driver
         clear_ir();
@@ -244,22 +122,20 @@ int main()
         ir_led_enable(false);
         put_ir();
 
-        //acquisition(&adc, &ext_light);
+        acquisition(&ext_light);
 
         ir_led_enable(true);
-        acquisition(&adc, &buffer);
-        printf("%d : %d\n", sensor_ch, buffer);
-        sleep_ms(100);
-        sensor_ch++;
-        if(sensor_ch >= SENSOR_COUNT)sensor_ch = 0;
+        acquisition(&buffer);
 
-        /*if(buffer > ext_light){
+        if(buffer > ext_light){
             buffer -= ext_light;
         }else{
             buffer = 0x0000;
         }
-        uint32_t mg = (sensor_ch << 24)| (mode << 16) | buffer;
-        multicore_fifo_push_blocking(mg);
+        //uint32_t mg = (sensor_ch << 24)| (mode << 16) | buffer;
+        //multicore_fifo_push_blocking(mg);
+        printf("%d : %d\n", sensor_ch, (int16_t)buffer);
+        sleep_ms(10);
 
         // increment
         mode++;
@@ -268,11 +144,9 @@ int main()
             sensor_ch++;
             if(sensor_ch == SENSOR_COUNT){
                 sensor_ch = 0;
+                dma_channel_set_read_addr(rgb_dma_ch, rgb_buffer, true); // trig dma
             }
         }
-        //pattern_snakes(RGB_LEDS, t);
-        //t++;*/
-
 
     }
 

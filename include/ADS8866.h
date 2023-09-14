@@ -10,14 +10,8 @@
 
 namespace ex_adc {
 
-    class ADS8866 {
-    private:
-        uint8_t cs;
-        spi_inst *spiInst;
-    public:
-        ADS8866(spi_inst *spiInstr, uint8_t pin_miso, uint8_t pin_cs, uint8_t pin_clk, uint8_t pin_mosi);
-        void read(uint16_t *val) const;
-    };
+    void init_adc();
+    void read_adc(uint16_t *val);
 
 } // ex_adc
 

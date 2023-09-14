@@ -5,6 +5,8 @@
 #ifndef TOUCHMATRIX_PICO_TM4_CONFIG_H
 #define TOUCHMATRIX_PICO_TM4_CONFIG_H
 
+#include <cstdint>
+
 #define BOARD_VER 4
 
 // I2C ADC defines
@@ -17,6 +19,7 @@
 #define POT_ADDR        0b0101111
 
 // SPI Defines
+#define SPI_INSTR spi0
 #define PIN_MISO 16
 #define PIN_CS  17
 #define PIN_SCK  18

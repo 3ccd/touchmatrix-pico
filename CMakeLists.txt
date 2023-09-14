@@ -17,10 +17,12 @@ project(touchmatrix-pico C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+add_compile_definitions(TM_4)
+
 # Add executable. Default name is the project name, version 0.1
 include_directories(config)
 include_directories(include)
-file(GLOB tm_src "src/*.cpp" "include/*.h")
+file(GLOB tm_src "src/*.cpp")
 
 add_executable(touchmatrix-pico ${tm_src})
 
