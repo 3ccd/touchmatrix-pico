@@ -2,11 +2,10 @@
 #define CHAIN     1
 
 #include <cstdio>
-#include <pico/binary_info.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
-#include "hardware/pio.h"
-#include "hardware/dma.h"
+#include "hardware/flash.h"
+#include "hardware/sync.h"
 #include "pico/multicore.h"
 
 #include "common.h"
@@ -14,25 +13,53 @@
 #include "ADS8866.h"
 #include "transfer.h"
 #include "peripheral.h"
-#include "ws2812.pio.h"
-
-
-uint32_t rgb_buffer[RGB_LEDS];
 
 uint16_t buffer = 0;
 uint16_t ext_light = 0;
 
-int rgb_dma_ch;
+void save_i2c_address(uint8_t addr){
+    const uint32_t FLASH_TARGET_OFFSET = 0x1F0000;
+    uint8_t write_data[FLASH_PAGE_SIZE] = {};
 
-void core1_init(){
-    transfer::brd_info b_info = {};
-    {
-        b_info.sensors = SENSOR_COUNT;
-        b_info.version = BOARD_VER;
-        b_info.chain = CHAIN;
-    }
+    write_data[0] = addr;
 
-    transfer::start_core(b_info);
+    uint32_t ints = save_and_disable_interrupts();
+    flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+    flash_range_program(FLASH_TARGET_OFFSET, write_data, FLASH_PAGE_SIZE);
+    restore_interrupts(ints);
+}
+
+uint8_t load_i2c_address(){
+    const uint32_t FLASH_TARGET_OFFSET = 0x1F0000;
+    const auto *flash_target_contents = (const uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET);
+
+    uint8_t addr = flash_target_contents[0];
+    return addr;
+}
+
+void wait_for_hsync(){
+    gpio_set_dir(PIN_HSYNC, GPIO_IN);
+
+    while(!gpio_get(PIN_HSYNC));
+
+    sleep_us(10);
+
+    gpio_set_dir(PIN_HSYNC, GPIO_OUT);
+    gpio_put(PIN_HSYNC, false);
+}
+
+void wait_for_vsync(){
+    gpio_set_dir(PIN_HSYNC, GPIO_IN);
+    gpio_set_dir(PIN_VSYNC, GPIO_IN);
+
+    while(!gpio_get(PIN_VSYNC));
+
+    sleep_us(10);
+
+    gpio_set_dir(PIN_HSYNC, GPIO_OUT);
+    gpio_set_dir(PIN_VSYNC, GPIO_OUT);
+    gpio_put(PIN_HSYNC, false);
+    gpio_put(PIN_VSYNC, false);
 }
 
 
@@ -40,43 +67,26 @@ int main()
 {
     stdio_init_all();
 
+    //uint8_t i2c_addr= load_i2c_address();
+    uint8_t i2c_addr = 0x01;
+    /*if(i2c_addr == 0x00 || i2c_addr == 0xff){
+        sleep_ms(5000);
+        printf("i2c Address has not been set yet.\n"
+               "Enter i2c address > ");
+        char line[256] = {};
+        gets(line);
+        printf("ok.\n");
+        sscanf(line, "%d", &i2c_addr);
+        printf("The Address is set to %d\n", i2c_addr);
+        save_i2c_address(i2c_addr);
+    }*/
+
     init_adc();
     init_mux();
     init_internal_i2c();
     init_ir();
 
     set_ir_brightness(2);
-
-    // initialize pio no.2
-    PIO rgb_pio pio1;
-    uint sm = pio_claim_unused_sm(rgb_pio, true);
-    uint offset = pio_add_program(rgb_pio, &ws2812_program);
-    ws2812_program_init(rgb_pio, sm, offset, PIN_RGB, RGB_CLOCK, false);
-
-    for(unsigned long & i : rgb_buffer){
-        i = 0x00000000;
-    }
-
-    rgb_dma_ch = dma_claim_unused_channel(true);
-    dma_channel_config dma_ch_config = dma_channel_get_default_config(rgb_dma_ch);
-    channel_config_set_transfer_data_size(&dma_ch_config, DMA_SIZE_32);
-    channel_config_set_read_increment(&dma_ch_config, true);
-    channel_config_set_write_increment(&dma_ch_config, false);
-    channel_config_set_dreq(&dma_ch_config, pio_get_dreq(rgb_pio, sm, true));
-
-    dma_channel_configure(
-            rgb_dma_ch,
-            &dma_ch_config,
-            &rgb_pio->txf[sm],
-            rgb_buffer,
-            RGB_LEDS,
-            false
-            );
-    /* dma_channel_set_irq0_enabled(rgb_dma_ch, true);
-    irq_set_exclusive_handler(DMA_IRQ_0, dma_handler);
-    irq_set_enabled(DMA_IRQ_0, true);
-
-    dma_handler();*/
 
     // initialize variable
     uint16_t sensor_ch = 0;
@@ -86,12 +96,22 @@ int main()
     clear_ir();
 
     // core1 init
-    //core1_init();
+    transfer::start_core(i2c_addr);
+
+    // init hsync_pin
 
     // pilot lamp
     gpio_init(25);
     gpio_set_dir(25, GPIO_OUT);
     gpio_put(25, true);
+
+    // h sync pin
+    gpio_init(PIN_HSYNC);
+    gpio_set_dir(PIN_HSYNC, GPIO_IN);
+
+    // v sync pin
+    gpio_init(PIN_VSYNC);
+    gpio_set_dir(PIN_VSYNC, GPIO_IN);
 
     while(true){
 
@@ -122,30 +142,37 @@ int main()
         ir_led_enable(false);
         put_ir();
 
-        acquisition(&ext_light);
+        //acquisition(&ext_light);
 
         ir_led_enable(true);
         acquisition(&buffer);
 
-        if(buffer > ext_light){
+        /*if(buffer > ext_light){
             buffer -= ext_light;
         }else{
             buffer = 0x0000;
-        }
-        //uint32_t mg = (sensor_ch << 24)| (mode << 16) | buffer;
-        //multicore_fifo_push_blocking(mg);
-        printf("%d : %d\n", sensor_ch, (int16_t)buffer);
-        sleep_ms(10);
+        }*/
+        uint32_t mg = (sensor_ch << 24)| (mode << 16) | buffer;
+        multicore_fifo_push_blocking(mg);
+        //printf("%d : %d\n", sensor_ch, (int16_t)buffer);
+        sleep_ms(100);
+        printf("%d\n", i2c_addr);
 
         // increment
         mode++;
         if(mode > mc){
             mode = 0;
             sensor_ch++;
+
             if(sensor_ch == SENSOR_COUNT){
+                wait_for_vsync();
+
                 sensor_ch = 0;
-                dma_channel_set_read_addr(rgb_dma_ch, rgb_buffer, true); // trig dma
+            }else{
+
+                wait_for_hsync();
             }
+
         }
 
     }

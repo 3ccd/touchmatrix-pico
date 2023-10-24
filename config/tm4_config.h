@@ -18,6 +18,13 @@
 #define TMP3_ADDR       0b0000000
 #define POT_ADDR        0b0101111
 
+// External Connector
+#define SLAVE_ADDR      0b0000001
+#define PIN_EX_SCL      5
+#define PIN_EX_SDA      4
+#define PIN_VSYNC       1
+#define PIN_HSYNC       0
+
 // SPI Defines
 #define SPI_INSTR spi0
 #define PIN_MISO 16

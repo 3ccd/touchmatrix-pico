@@ -2,11 +2,17 @@
 // Created by ura on 6/9/23.
 //
 
-#include "pico/stdlib.h"
-#include "pico/multicore.h"
-
 #ifndef TOUCHMATRIX_PICO_TRANSFER_H
 #define TOUCHMATRIX_PICO_TRANSFER_H
+
+#include "pico/stdlib.h"
+#include "pico/stdio.h"
+#include "pico/multicore.h"
+#include "i2c_fifo.h"
+#include "i2c_slave.h"
+#include "common.h"
+
+#define D_BUF_LEN (SENSOR_COUNT * (OP_MODES + 1))
 
 namespace transfer{
 
@@ -25,8 +31,11 @@ namespace transfer{
     };
 
     void data_transfer_via_usb();
-    void start_core(brd_info bi);
-    void data_transfer_via_i2c(brd_info *info);
+    void read_via_usb();
+    void start_core(uint8_t addr);
+    void data_transfer_via_i2c();
+    static void i2c_slave_handler(i2c_inst_t *i2c, i2c_slave_event_t event);
+    static void init_i2c_slave();
 
 }
 
