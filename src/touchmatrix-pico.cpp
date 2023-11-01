@@ -155,8 +155,6 @@ int main()
         uint32_t mg = (sensor_ch << 24)| (mode << 16) | buffer;
         multicore_fifo_push_blocking(mg);
         //printf("%d : %d\n", sensor_ch, (int16_t)buffer);
-        sleep_ms(100);
-        printf("%d\n", i2c_addr);
 
         // increment
         mode++;

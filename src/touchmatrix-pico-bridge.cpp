@@ -13,10 +13,21 @@
 
 #include "common.h"
 #include "ws2812.pio.h"
-#include "transfer.h"
 
-#define CHAIN_MAX   3
+extern "C" {
+    #include "port_common.h"
+
+    #include "wizchip_conf.h"
+    #include "w5x00_spi.h"
+    #include "socket.h"
+}
+
+
+#define PLL_SYS_KHZ (133 * 1000)
+
+#define CHAIN_MAX   2
 #define DATA_BUF_LEN (SENSOR_COUNT * (OP_MODES + 1) * CHAIN_MAX)
+#define DATA_LEN_PER_BRD    SENSOR_COUNT * (OP_MODES + 1)
 
 #define RGB_BUF_LEN (RGB_LEDS * CHAIN_MAX)
 
@@ -24,7 +35,7 @@
 #define I2C_SCL_PIN 5
 #define I2C_INST    i2c0
 
-#define BRIDGE_RGB_PIN      17
+#define BRIDGE_RGB_PIN      13
 #define BRIDGE_HSYNC_PIN    15
 #define BRIDGE_VSYNC_PIN    14
 
@@ -35,6 +46,9 @@
 #define DATA_ESC        0xDB
 #define DATA_ESC_END    0xDC
 #define DATA_ESC_ESC    0xDD
+
+#define UDP_PORT        8002
+#define UDP_SOCK        0
 
 
 uint32_t rgb_buffer[RGB_BUF_LEN];
@@ -47,6 +61,202 @@ uint32_t board_info = 0xff << 24 | BOARD_VER << 16 | CHAIN_MAX << 8 | SENSOR_COU
 
 uint16_t data_buffer[DATA_BUF_LEN] = {};
 int rgb_dma_ch;
+
+uint8_t  data_ip[4] = {192, 168, 0, 23};
+
+static wiz_NetInfo g_net_info =
+        {
+                .mac = {0x00, 0x08, 0xDC, 0x12, 0x34, 0x56}, // MAC address
+                .ip = {192, 168, 0, 101},                     // IP address
+                .sn = {255, 255, 255, 0},                    // Subnet Mask
+                .gw = {192, 168, 0, 1},                     // Gateway
+                .dns = {8, 8, 8, 8},                         // DNS server
+                .dhcp = NETINFO_STATIC                       // DHCP enable/disable
+        };
+
+
+static void set_clock_khz()
+{
+    // set a system clock frequency in khz
+    set_sys_clock_khz(PLL_SYS_KHZ, true);
+
+    // configure the specified clock
+    clock_configure(
+            clk_peri,
+            0,                                                // No glitchless mux
+            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, // System PLL on AUX mux
+            PLL_SYS_KHZ * 1000,                               // Input frequency
+            PLL_SYS_KHZ * 1000                                // Output (must be same as no divider)
+    );
+}
+
+
+void eth_init(){
+    /* Initialize */
+
+    wizchip_spi_initialize();
+    wizchip_cris_initialize();
+
+    wizchip_reset();
+    wizchip_initialize();
+    wizchip_check();
+
+    network_initialize(g_net_info);
+
+    /* Get network information */
+    print_network_information(g_net_info);
+}
+
+int32_t tcp_transfer(uint8_t sn, uint16_t port) {
+    int32_t ret;
+    uint16_t size = 0, sentsize = 0;
+
+    uint8_t destip[4];
+    uint16_t destport;
+
+    switch (getSn_SR(sn)) {
+        case SOCK_ESTABLISHED :
+            if (getSn_IR(sn) & Sn_IR_CON) {
+                getSn_DIPR(sn, destip);
+                destport = getSn_DPORT(sn);
+
+                printf("%d:Connected - %d.%d.%d.%d : %d\r\n", sn, destip[0], destip[1], destip[2], destip[3], destport);
+                setSn_IR(sn, Sn_IR_CON);
+            }
+            if ((size = getSn_RX_RSR(sn)) > 0) // Don't need to check SOCKERR_BUSY because it doesn't not occur.
+            {
+                printf("%d:Received : %d bytes\r\n", sn, size);
+                if(size > RGB_BUF_LEN * 4) size = RGB_BUF_LEN * 4;
+                ret = recv(sn, (uint8_t *)rgb_buffer, size);
+
+                if (ret <= 0)
+                    return ret;      // check SOCKERR_BUSY & SOCKERR_XXX. For showing the occurrence of SOCKERR_BUSY.
+
+                sentsize = 0;
+                while(sentsize != DATA_BUF_LEN * 2){
+                    ret = send(sn, (uint8_t *)data_buffer+sentsize, (DATA_BUF_LEN * 2)-sentsize);
+                    if(ret < 0)
+                    {
+                        close(sn);
+                        return ret;
+                    }
+                    sentsize += ret; // Don't care SOCKERR_BUSY, because it is zero.
+                }
+            }
+            break;
+        case SOCK_CLOSE_WAIT :
+            printf("%d:CloseWait\r\n", sn);
+            if ((ret = disconnect(sn)) != SOCK_OK) return ret;
+            printf("%d:Socket Closed\r\n", sn);
+            break;
+        case SOCK_INIT :
+            printf("%d:Listen, TCP server loopback, port [%d]\r\n", sn, port);
+            if ((ret = listen(sn)) != SOCK_OK) return ret;
+            break;
+        case SOCK_CLOSED:
+            printf("%d:TCP server loopback start\r\n", sn);
+            if ((ret = socket(sn, Sn_MR_TCP, port, 0x00)) != sn) return ret;
+            printf("%d:Socket opened\r\n", sn);
+            break;
+        default:
+            break;
+    }
+    return 1;
+}
+
+int32_t tcp_send(uint8_t sn, uint16_t port){
+    int32_t ret;
+    uint16_t sentsize = 0;
+
+    uint8_t destip[4];
+    uint16_t destport;
+
+    switch (getSn_SR(sn)) {
+        case SOCK_ESTABLISHED :
+            if (getSn_IR(sn) & Sn_IR_CON) {
+                getSn_DIPR(sn, destip);
+                destport = getSn_DPORT(sn);
+
+                printf("%d:Connected - %d.%d.%d.%d : %d\r\n", sn, destip[0], destip[1], destip[2], destip[3], destport);
+                setSn_IR(sn, Sn_IR_CON);
+            }
+
+            sentsize = 0;
+            while(sentsize != DATA_BUF_LEN * 2){
+                ret = send(sn, (uint8_t *)data_buffer+sentsize, (DATA_BUF_LEN * 2)-sentsize);
+                if(ret < 0)
+                {
+                    close(sn);
+                    return ret;
+                }
+                sentsize += ret; // Don't care SOCKERR_BUSY, because it is zero.
+            }
+            break;
+
+        case SOCK_CLOSE_WAIT :
+            printf("%d:CloseWait\r\n", sn);
+            if ((ret = disconnect(sn)) != SOCK_OK) return ret;
+            printf("%d:Socket Closed\r\n", sn);
+            break;
+        case SOCK_INIT :
+            printf("%d:Listen, TCP server loopback, port [%d]\r\n", sn, port);
+            if ((ret = listen(sn)) != SOCK_OK) return ret;
+            break;
+        case SOCK_CLOSED:
+            printf("%d:TCP server loopback start\r\n", sn);
+            if ((ret = socket(sn, Sn_MR_TCP, port, 0x00)) != sn) return ret;
+            printf("%d:Socket opened\r\n", sn);
+            break;
+        default:
+            break;
+    }
+    return 1;
+}
+
+int32_t udp_transfer(uint8_t sn, uint16_t port)
+{
+    int32_t  ret;
+    uint16_t size;
+    uint8_t  destip[4] = {};
+    uint16_t destport = 0;
+
+    switch(getSn_SR(sn))
+    {
+        case SOCK_UDP :
+            size = getSn_RX_RSR(sn);
+            if(size > 0){
+                if(size > RGB_LEDS * 4) size = RGB_LEDS * 4;
+
+                int offset = (sn * RGB_LEDS) * 4;
+                ret = recvfrom(sn, (uint8_t *)rgb_buffer + offset, size, destip, (uint16_t*)&destport);
+
+
+                /*printf("received : %hu [%d.%d.%d.%d:%d] %lu\n",
+                       size,
+                       destip[0],
+                       destip[1],
+                       destip[2],
+                       destip[3],
+                       destport,
+                       rgb_buffer[0]
+                       );*/
+                if(ret <= 0)
+                {
+                    return ret;
+                }
+            }
+
+        case SOCK_CLOSED:
+            ret = socket(sn, Sn_MR_UDP, port, 0x00);
+            if(ret != sn) return ret;
+            setSn_RXBUF_SIZE(sn, 8); // set size of rx buffer to 8kByte
+            break;
+
+        default :
+            break;
+    }
+    return 1;
+}
 
 
 void transfer_via_usb(uint32_t data) {
@@ -140,20 +350,17 @@ void read() {
 
 
 void communicate() {
+    eth_init();
     multicore_fifo_push_blocking(CORE_STARTED);
-    uint8_t cnt = 0;
 
     while (true) {
-        read();
+        for(int i = 0; i < CHAIN_MAX; i++){
+            udp_transfer(UDP_SOCK + i, UDP_PORT + i);
+        }
+        tcp_send(UDP_SOCK + CHAIN_MAX, UDP_PORT + CHAIN_MAX);
 
-        /*for(int i = 0; i < DATA_BUF_LEN; i++){
-            transfer_via_usb(
-                    (uint16_t)i << 16 |
-                    data_buffer[i]
-                    );
-        }*/
-        cnt++;
-        if(cnt == 0)transfer_via_usb(board_info);
+        dma_channel_set_read_addr(rgb_dma_ch, rgb_buffer, true); // trig dma
+        sleep_ms(10);
     }
 }
 
@@ -168,8 +375,28 @@ void start_core() {
     }
 }
 
+void test_rgb_leds(){
+
+    for(unsigned long & i : rgb_buffer){
+        i = 0x00001000;
+    }
+    dma_channel_set_read_addr(rgb_dma_ch, rgb_buffer, true); // trig dma
+    sleep_ms(1500);
+
+    for(unsigned long & i : rgb_buffer){
+        i = 0x00000000;
+    }
+    dma_channel_set_read_addr(rgb_dma_ch, rgb_buffer, true); // trig dma
+
+}
+
+
 int main() {
+    set_clock_khz();
+
     stdio_init_all();
+
+    sleep_ms(5000);
 
     start_core();
 
@@ -180,7 +407,7 @@ int main() {
     ws2812_program_init(rgb_pio, sm, offset, BRIDGE_RGB_PIN, RGB_CLOCK, false);
 
     for (unsigned long &i: rgb_buffer) {
-        i = 0x10000000;
+        i = 0x00000000;
     }
 
     rgb_dma_ch = dma_claim_unused_channel(true);
@@ -224,27 +451,20 @@ int main() {
     gpio_set_dir(25, GPIO_OUT);
     gpio_put(25, true);
 
-    uint8_t cnt = 0;
-    bool pol = false;
+    test_rgb_leds();
 
     while (true) {
-        int c = i2c_read_blocking(i2c0, 0x01, (uint8_t *) data_buffer, DATA_BUF_LEN * 2, false);
-        printf("%d %d\n", c, data_buffer[0]);
-        sleep_ms(1);
-
-        /*if(pol){
-            rgb_buffer[cnt] = 0x10101000;
-        }else{
-            rgb_buffer[cnt] = 0x00000000;
+        for(int i = 0; i < CHAIN_MAX; i++) {
+            int buf_os = SENSOR_COUNT * (OP_MODES + 1) * i;
+            i2c_read_blocking(
+                    i2c0,
+                    i + 1,
+                    (uint8_t *) (data_buffer + buf_os),
+                    DATA_LEN_PER_BRD * 2,
+                    false
+            );
         }
-        cnt++;
-        if(cnt >= RGB_LEDS){
-            cnt = 0;
-            pol = !pol;
-        }*/
-        if(cnt == 0)dma_channel_set_read_addr(rgb_dma_ch, rgb_buffer, true); // trig dma
-
-        cnt++;
+        sleep_ms(10);
     }
 
 }
