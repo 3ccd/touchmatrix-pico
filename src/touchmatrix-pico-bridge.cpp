@@ -62,8 +62,6 @@ uint32_t board_info = 0xff << 24 | BOARD_VER << 16 | CHAIN_MAX << 8 | SENSOR_COU
 uint16_t data_buffer[DATA_BUF_LEN] = {};
 int rgb_dma_ch;
 
-uint8_t  data_ip[4] = {192, 168, 0, 23};
-
 static wiz_NetInfo g_net_info =
         {
                 .mac = {0x00, 0x08, 0xDC, 0x12, 0x34, 0x56}, // MAC address
@@ -231,14 +229,16 @@ int32_t udp_transfer(uint8_t sn, uint16_t port)
                 ret = recvfrom(sn, (uint8_t *)rgb_buffer + offset, size, destip, (uint16_t*)&destport);
 
 
-                /*printf("received : %hu [%d.%d.%d.%d:%d] %lu\n",
+                /*printf("received[%d] : %hu [%d.%d.%d.%d:%d] %lu %d\n",
+                       sn,
                        size,
                        destip[0],
                        destip[1],
                        destip[2],
                        destip[3],
                        destport,
-                       rgb_buffer[0]
+                       rgb_buffer[570],
+                       offset
                        );*/
                 if(ret <= 0)
                 {
@@ -360,7 +360,7 @@ void communicate() {
         tcp_send(UDP_SOCK + CHAIN_MAX, UDP_PORT + CHAIN_MAX);
 
         dma_channel_set_read_addr(rgb_dma_ch, rgb_buffer, true); // trig dma
-        sleep_ms(10);
+        sleep_ms(20);
     }
 }
 

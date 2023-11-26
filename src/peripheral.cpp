@@ -23,7 +23,7 @@ void acquisition(uint16_t *dst){
     for (int i = 0; i < 8; i++){
         sleep_us(1);
         ex_adc::read_adc(&ret);
-        tmp += ret;
+        tmp += (ret ^ 0x8000);
     }
     *dst = tmp >> 3;
 }
@@ -69,6 +69,7 @@ void init_ir(){
 }
 
 void set_ir(uint8_t num){
+    if((num >> 4) == 0xFF) return;
     uint8_t ld_num = 1 ^ ((num >> 4) & 1);
     ir_buffer[ld_num] |= 0x0001 << (num & 0b00001111);
 }

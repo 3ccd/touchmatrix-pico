@@ -142,16 +142,14 @@ int main()
         ir_led_enable(false);
         put_ir();
 
-        //acquisition(&ext_light);
+        acquisition(&ext_light);
 
         ir_led_enable(true);
-        acquisition(&buffer);
+        acquisition((uint16_t *)&buffer);
 
-        /*if(buffer > ext_light){
+        if(buffer > ext_light){
             buffer -= ext_light;
-        }else{
-            buffer = 0x0000;
-        }*/
+        }
         uint32_t mg = (sensor_ch << 24)| (mode << 16) | buffer;
         multicore_fifo_push_blocking(mg);
         //printf("%d : %d\n", sensor_ch, (int16_t)buffer);
