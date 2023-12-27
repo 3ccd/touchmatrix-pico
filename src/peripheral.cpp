@@ -20,12 +20,18 @@ void acquisition(uint16_t *dst){
     uint32_t tmp = 0;
     uint16_t ret = 0;
     sleep_us(15);
+
+    //ex_adc::read_adc(&ret);
+    //if(ret >> 15) ret = 0;
+
     for (int i = 0; i < 8; i++){
         sleep_us(1);
         ex_adc::read_adc(&ret);
-        tmp += (ret ^ 0x8000);
+        if(ret >> 15) ret = 0;
+        tmp += ret;
     }
     *dst = tmp >> 3;
+    //*dst = ret;
 }
 
 void init_mux(){
