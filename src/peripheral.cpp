@@ -27,7 +27,7 @@ void acquisition(uint16_t *dst){
     for (int i = 0; i < 8; i++){
         sleep_us(1);
         ex_adc::read_adc(&ret);
-        if(ret >> 15) ret = 0;
+        //if(ret >> 15) ret = 0;
         tmp += ret;
     }
     *dst = tmp >> 3;
