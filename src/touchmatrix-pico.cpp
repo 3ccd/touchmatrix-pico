@@ -86,7 +86,7 @@ int main()
     init_internal_i2c();
     init_ir();
 
-    set_ir_brightness(2);
+    set_ir_brightness(20);
 
     // initialize variable
     uint16_t sensor_ch = 0;
