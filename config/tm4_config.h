@@ -79,24 +79,24 @@ static uint16_t mux_map[] = {
 };
 
 static uint32_t led_map[] = {
-        0xff000103,
-        0xff010204,
-        0xff02ff05,
-        0x00ff030f,
+        0x1e000103,
+        0x1d010204,
+        0x1c020005,
+        0x0005030f,
         0x0103040e,
         0x0204050d,
         0x030f0e10,
         0x040e0d11,
-        0x050dff12,
-        0x0fff101f,
+        0x050d0f12,
+        0x0f12101f,
         0x0e101119,
         0x0d111218,
         0x101f191e,
         0x1119181d,
         0x1218ff1c,
-        0x1fff1eff,
-        0x191e1dff,
-        0x181d1cff
+        0x1f1c1e00,
+        0x191e1d01,
+        0x181d1c02
 };
 
 #endif //TOUCHMATRIX_PICO_TM4_CONFIG_H
