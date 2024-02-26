@@ -68,7 +68,7 @@ int main()
     stdio_init_all();
 
     //uint8_t i2c_addr= load_i2c_address();
-    uint8_t i2c_addr = 0x01;
+    uint8_t i2c_addr = 0x02;
     /*if(i2c_addr == 0x00 || i2c_addr == 0xff){
         sleep_ms(5000);
         printf("i2c Address has not been set yet.\n"
@@ -86,7 +86,7 @@ int main()
     init_internal_i2c();
     init_ir();
 
-    set_ir_brightness(20);
+    set_ir_brightness(5);
 
     // initialize variable
     uint16_t sensor_ch = 0;
@@ -142,20 +142,23 @@ int main()
         ir_led_enable(false);
         put_ir();
 
-        acquisition(&ext_light);
+        ir_led_enable(true);
+        sleep_us(15);
 
         wait_for_hsync();
-
-        ir_led_enable(true);
         acquisition((uint16_t *)&buffer);
+
         ir_led_enable(false);
 
+        wait_for_hsync();
+        acquisition(&ext_light);
+
         if(buffer > ext_light){
-            buffer -= ext_light;
+            buffer -= (uint16_t)((float)ext_light * 1.3f);
         }
         uint32_t mg = (sensor_ch << 24)| (mode << 16) | buffer;
         multicore_fifo_push_blocking(mg);
-        //printf("%d : %d\n", sensor_ch, (int16_t)buffer);
+        //if(sensor_ch == 7)printf("%d : %d, %d, %d\n", sensor_ch, buffer, ext_light, buffer - ext_light);
 
         // increment
         mode++;

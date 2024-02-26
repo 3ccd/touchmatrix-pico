@@ -19,18 +19,17 @@ void init_adc(){
 void acquisition(uint16_t *dst){
     uint32_t tmp = 0;
     uint16_t ret = 0;
-    sleep_us(15);
 
     //ex_adc::read_adc(&ret);
     //if(ret >> 15) ret = 0;
 
-    for (int i = 0; i < 8; i++){
+    for (int i = 0; i < 32; i++){
         sleep_us(1);
         ex_adc::read_adc(&ret);
         //if(ret >> 15) ret = 0;
         tmp += ret;
     }
-    *dst = tmp >> 3;
+    *dst = tmp >> 5;
     //*dst = ret;
 }
 
